@@ -8,7 +8,9 @@
     "dev": "nodemon server.js",
     "test": "jest",
     "setup": "node scripts/setup.js",
-    "validate": "node scripts/setup.js"
+    "setup-test": "node scripts/setup.js --test-mode",
+    "validate": "node scripts/setup.js",
+    "test-url": "node scripts/test-url.js"
   },
   "dependencies": {
     "express": "^4.18.2",

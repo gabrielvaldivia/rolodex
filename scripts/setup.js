@@ -14,14 +14,24 @@ dotenv.config();
 async function runSetup() {
   console.log('🚀 SMS-to-Notion Setup & Validation Script\n');
   
+  // Check if this is test mode (only Notion required)
+  const testMode = process.argv.includes('--test-mode');
+  
   const checks = [
-    { name: 'Environment Variables', fn: checkEnvironmentVariables },
-    { name: 'Notion Database', fn: checkNotionConnection },
-    { name: 'Twilio Account', fn: checkTwilioConnection },
-    { name: 'Redis Connection', fn: checkRedisConnection }
+    { name: 'Environment Variables', fn: () => checkEnvironmentVariables(testMode) },
+    { name: 'Notion Database', fn: checkNotionConnection }
   ];
   
+  // Add optional checks for full setup
+  if (!testMode) {
+    checks.push(
+      { name: 'Twilio Account', fn: checkTwilioConnection },
+      { name: 'Redis Connection', fn: checkRedisConnection }
+    );
+  }
+  
   let allPassed = true;
+  let warnings = [];
   
   for (const check of checks) {
     try {
@@ -35,14 +45,55 @@ async function runSetup() {
     }
   }
   
+  // Check optional components in test mode
+  if (testMode) {
+    console.log('🧪 Test Mode - Checking optional components:\n');
+    
+    const optionalChecks = [
+      { name: 'Twilio (optional)', fn: checkTwilioConnection },
+      { name: 'Redis (optional)', fn: checkRedisConnection }
+    ];
+    
+    for (const check of optionalChecks) {
+      try {
+        console.log(`🔍 Checking ${check.name}...`);
+        await check.fn();
+        console.log(`✅ ${check.name} - OK\n`);
+      } catch (error) {
+        console.log(`⚠️  ${check.name} - Not configured`);
+        console.log(`   This is OK for testing. Error: ${error.message}\n`);
+        warnings.push(check.name);
+      }
+    }
+  }
+  
   if (allPassed) {
-    console.log('🎉 All checks passed! Your system is ready to go.');
-    console.log('\n📋 Next steps:');
-    console.log('1. Deploy your server to a hosting platform');
-    console.log('2. Configure Twilio webhook with your server URL');
-    console.log('3. Test by sending a URL to your Twilio number');
+    console.log('🎉 Core components validated!');
+    
+    if (testMode) {
+      console.log('\n🧪 Test Mode Setup Complete!');
+      console.log('\n📋 You can now test with:');
+      console.log('   npm run test-url https://example.com');
+      console.log('   npm start (then visit http://localhost:3000/test)');
+      
+      if (warnings.length > 0) {
+        console.log(`\n⚠️  Optional components missing: ${warnings.join(', ')}`);
+        console.log('   Add these for full SMS functionality');
+      }
+    } else {
+      console.log('\n📋 Next steps:');
+      console.log('1. Deploy your server to a hosting platform');
+      console.log('2. Configure Twilio webhook with your server URL');
+      console.log('3. Test by sending a URL to your Twilio number');
+    }
   } else {
     console.log('💥 Some checks failed. Please fix the issues above and run again.');
+    
+    if (!testMode) {
+      console.log('\n💡 Tip: Run with --test-mode to validate just the core components:');
+      console.log('   npm run setup -- --test-mode');
+    }
+    
     process.exit(1);
   }
 }
@@ -50,28 +101,37 @@ async function runSetup() {
 /**
  * Check that all required environment variables are set
  */
-function checkEnvironmentVariables() {
-  const required = [
+function checkEnvironmentVariables(testMode = false) {
+  const coreRequired = [
+    'NOTION_API_KEY',
+    'NOTION_DATABASE_ID'
+  ];
+  
+  const fullRequired = [
     'TWILIO_ACCOUNT_SID',
     'TWILIO_AUTH_TOKEN', 
     'TWILIO_PHONE_NUMBER',
-    'NOTION_API_KEY',
-    'NOTION_DATABASE_ID',
-    'REDIS_URL'
+    'REDIS_URL',
+    ...coreRequired
   ];
   
+  const required = testMode ? coreRequired : fullRequired;
   const missing = required.filter(key => !process.env[key]);
   
   if (missing.length > 0) {
     throw new Error(`Missing environment variables: ${missing.join(', ')}`);
   }
   
-  // Validate phone number format
-  if (!process.env.TWILIO_PHONE_NUMBER.startsWith('+')) {
-    throw new Error('TWILIO_PHONE_NUMBER must include country code with + prefix');
+  // Additional validations for full mode
+  if (!testMode) {
+    // Validate phone number format
+    if (process.env.TWILIO_PHONE_NUMBER && !process.env.TWILIO_PHONE_NUMBER.startsWith('+')) {
+      throw new Error('TWILIO_PHONE_NUMBER must include country code with + prefix');
+    }
   }
   
-  console.log('   All required environment variables are set');
+  const mode = testMode ? 'test mode' : 'full setup';
+  console.log(`   All required environment variables are set for ${mode}`);
 }
 
 /**

@@ -129,6 +129,45 @@ Text any URL to your Twilio phone number:
 - `https://twitter.com/username`
 - `https://linkedin.com/in/profile`
 
+## 🧪 Testing Without SMS Setup
+
+Want to test the core functionality before setting up SMS? You have three options:
+
+### Option 1: Command Line Testing
+```bash
+# Set up minimal environment (just Notion)
+cp .env.test .env
+# Edit .env with your Notion credentials
+
+# Test any URL directly
+npm run test-url https://example.com
+npm run test-url https://twitter.com/username
+npm run test-url https://linkedin.com/in/profile
+```
+
+### Option 2: Web Interface Testing
+```bash
+# Start the server
+npm start
+
+# Visit the test page
+open http://localhost:3000/test
+```
+
+### Option 3: API Testing
+```bash
+# Use curl or any HTTP client
+curl -X POST http://localhost:3000/test-url \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
+
+### Validate Test Setup
+```bash
+# Check if your test environment is ready
+npm run setup -- --test-mode
+```
+
 ## 📱 How It Works
 
 ### User Experience:
