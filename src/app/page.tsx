@@ -655,15 +655,32 @@ export default function Home() {
     const cachedContacts = localStorage.getItem("rolodex-contacts");
     const cachedTime = localStorage.getItem("rolodex-contacts-time");
 
+    console.log(
+      "Loading contacts - cache available:",
+      cachedContacts ? "Yes" : "No"
+    );
+    console.log("Cache time:", cachedTime);
+
     if (cachedContacts && cachedTime) {
       const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000; // 6 hours ago
+      const cacheAge = Date.now() - parseInt(cachedTime);
+      console.log(`Cache age: ${Math.round(cacheAge / (1000 * 60))} minutes`);
+
       if (parseInt(cachedTime) > sixHoursAgo) {
         console.log("Loading contacts from cache");
         const baseContacts = JSON.parse(cachedContacts);
+        console.log(`Found ${baseContacts.length} cached contacts`);
         const contactsWithEdits = await applyEditsToContacts(baseContacts);
         setContacts(contactsWithEdits);
+        console.log(
+          `Set ${contactsWithEdits.length} contacts (with edits applied)`
+        );
         return;
+      } else {
+        console.log("Cache is older than 6 hours, fetching fresh contacts");
       }
+    } else {
+      console.log("No cache found, fetching fresh contacts");
     }
 
     // If no cache or cache is old, fetch new contacts
@@ -716,18 +733,45 @@ export default function Home() {
       const contactsWithEdits = await applyEditsToContacts(data);
       setContacts(contactsWithEdits);
 
-      // Cache the contacts and timestamp
-      localStorage.setItem("rolodex-contacts", JSON.stringify(data));
-      localStorage.setItem("rolodex-contacts-time", Date.now().toString());
+      // Only cache non-empty contact arrays to prevent overwriting good data with auth failures
+      if (data.length > 0) {
+        // Cache the contacts and timestamp
+        localStorage.setItem("rolodex-contacts", JSON.stringify(data));
+        localStorage.setItem("rolodex-contacts-time", Date.now().toString());
 
-      // Update last sync time
-      const now = new Date().toLocaleTimeString();
-      localStorage.setItem("rolodex-last-sync", now);
+        // Update last sync time
+        const now = new Date().toLocaleTimeString();
+        localStorage.setItem("rolodex-last-sync", now);
 
-      console.log(`Cached ${data.length} contacts`);
+        console.log(`Cached ${data.length} contacts`);
+      } else {
+        console.log(
+          "Received empty contact array, not caching to preserve existing data"
+        );
+      }
     } catch (error) {
       console.error("Error fetching contacts:", error);
-      // Clear any cached data on error
+
+      // Check if we have cached contacts to fall back to
+      const cachedContacts = localStorage.getItem("rolodex-contacts");
+      console.log("Cached contacts available:", cachedContacts ? "Yes" : "No");
+
+      if (cachedContacts) {
+        console.log("Attempting to load from cache due to API error");
+        try {
+          const baseContacts = JSON.parse(cachedContacts);
+          console.log(`Found ${baseContacts.length} cached contacts`);
+          const contactsWithEdits = await applyEditsToContacts(baseContacts);
+          setContacts(contactsWithEdits);
+          console.log("Successfully loaded contacts from cache");
+          return; // Don't clear cache if we successfully loaded from it
+        } catch (cacheError) {
+          console.error("Error loading cached contacts:", cacheError);
+        }
+      }
+
+      // Only clear cache if we couldn't load from it or if it's a real server error
+      console.log("Clearing cache due to error");
       localStorage.removeItem("rolodex-contacts");
       localStorage.removeItem("rolodex-contacts-time");
     } finally {
