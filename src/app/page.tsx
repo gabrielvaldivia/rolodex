@@ -1516,9 +1516,6 @@ export default function Home() {
                       <Label className="text-sm font-medium">
                         Hide Contact
                       </Label>
-                      <p className="text-sm text-muted-foreground">
-                        Contact will not appear in the table
-                      </p>
                     </div>
                     <Switch
                       checked={editedContact.hidden || false}
@@ -1588,7 +1585,7 @@ export default function Home() {
                               <div className="text-foreground max-w-full overflow-hidden">
                                 <EmailText
                                   content={editedContact.lastEmailPreview}
-                                  className="max-w-none"
+                                  className="break-words"
                                 />
                               </div>
                             )}
