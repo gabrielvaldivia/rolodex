@@ -16,6 +16,7 @@ export const authConfig = {
     })
   ],
   callbacks: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async jwt({ token, account }: { token: any; account: any }) {
       if (account) {
         console.log('New account login, storing tokens')
@@ -33,6 +34,7 @@ export const authConfig = {
       console.log('Access token expired, refreshing...')
       return await refreshAccessToken(token)
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async session({ session, token }: { session: any; token: any }) {
       session.accessToken = token.accessToken
       session.error = token.error
@@ -41,6 +43,7 @@ export const authConfig = {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function refreshAccessToken(token: any) {
   try {
     const url = 'https://oauth2.googleapis.com/token'

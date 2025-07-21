@@ -4,6 +4,7 @@ import { useSession, signIn, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -20,7 +21,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Settings, RefreshCw } from "lucide-react";
+import { Settings, RefreshCw, ExternalLink, Eye, EyeOff } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { RichText } from "@/components/RichText";
@@ -32,10 +33,21 @@ interface Contact {
   email: string;
   company?: string;
   lastContact: string;
+  photoUrl?: string;
   source: string;
   lastEmailSubject?: string;
   lastEmailPreview?: string;
   lastMeetingName?: string;
+  hidden?: boolean;
+}
+
+interface ContactEdit {
+  id: string;
+  name: string;
+  email: string;
+  company: string;
+  updatedAt: string;
+  hidden?: boolean;
 }
 
 type SortField = "name" | "email" | "company" | "lastContact";
@@ -47,6 +59,8 @@ interface Company {
   contactCount: number;
   lastContact: string;
   contacts: Contact[];
+  hidden?: boolean;
+  website?: string;
 }
 
 // Add relative date formatting function
@@ -139,6 +153,23 @@ const formatRegularDate = (dateString: string): string => {
   return `${month} ${day} at ${hour12}:${minutesStr}${ampm}`;
 };
 
+// Generate website URL from company name
+const generateCompanyWebsite = (companyName: string): string => {
+  if (!companyName) return "";
+
+  // Clean up the company name
+  const cleanName = companyName
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "") // Remove special characters
+    .replace(/\s+/g, "") // Remove spaces
+    .replace(/^(the|a|an)\s+/i, "") // Remove articles
+    .replace(/(inc|llc|corp|ltd|company|co)$/i, ""); // Remove company suffixes
+
+  if (!cleanName) return "";
+
+  return `https://${cleanName}.com`;
+};
+
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -150,14 +181,19 @@ export default function Home() {
   const [editedContact, setEditedContact] = useState<Contact | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
-  const [sortField, setSortField] = useState<SortField>("name");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [sortField, setSortField] = useState<SortField>("lastContact");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentView, setCurrentView] = useState<View>("contacts");
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [isCompanySheetOpen, setIsCompanySheetOpen] = useState(false);
   const [editingCompanyName, setEditingCompanyName] = useState(false);
+  const [editingCompanyWebsite, setEditingCompanyWebsite] = useState(false);
   const [originalCompanyName, setOriginalCompanyName] = useState("");
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaveError, setLastSaveError] = useState<string | null>(null);
+  const [backgroundSyncing, setBackgroundSyncing] = useState(false);
 
   // Function to apply edits to contacts
   const applyEditsToContacts = async (
@@ -180,6 +216,7 @@ export default function Home() {
             name: edit.name || contact.name,
             email: edit.email || contact.email,
             company: edit.company || contact.company,
+            hidden: edit.hidden || contact.hidden,
           };
         }
         return contact;
@@ -192,6 +229,9 @@ export default function Home() {
 
   const handleCompanyClick = (company: Company) => {
     setSelectedCompany(company);
+    setLastSaveError(null);
+    setIsSaving(false);
+    setEditingCompanyWebsite(false);
     setIsCompanySheetOpen(true);
   };
 
@@ -199,11 +239,17 @@ export default function Home() {
     setIsCompanySheetOpen(false);
     setSelectedCompany(null);
     setEditingCompanyName(false);
+    setEditingCompanyWebsite(false);
     setOriginalCompanyName("");
+    setLastSaveError(null);
+    setIsSaving(false);
   };
 
   const updateCompanyName = async (oldName: string, newName: string) => {
     if (oldName === newName || !newName.trim()) return;
+
+    setLastSaveError(null);
+    setIsSaving(true);
 
     try {
       // Update all contacts that belong to this company
@@ -228,7 +274,7 @@ export default function Home() {
         (contact) => contact.company === oldName
       );
 
-      await Promise.all(
+      const responses = await Promise.all(
         contactsToUpdate.map((contact) =>
           fetch(`/api/contacts/${contact.id}`, {
             method: "PUT",
@@ -237,16 +283,168 @@ export default function Home() {
               name: contact.name,
               email: contact.email,
               company: newName.trim(),
+              hidden: contact.hidden,
             }),
           })
         )
       );
 
+      // Check if all requests were successful
+      const failedRequests = responses.filter((response) => !response.ok);
+      if (failedRequests.length > 0) {
+        throw new Error(`Failed to update ${failedRequests.length} contact(s)`);
+      }
+
       setEditingCompanyName(false);
+      console.log(
+        `Company name updated successfully for ${contactsToUpdate.length} contacts`
+      );
     } catch (error) {
       console.error("Error updating company name:", error);
+      setLastSaveError(
+        error instanceof Error ? error.message : "Failed to update company name"
+      );
+
       // Revert changes on error
       setContacts(contacts);
+
+      // Reset selected company to original state
+      if (selectedCompany) {
+        setSelectedCompany({
+          ...selectedCompany,
+          name: oldName,
+        });
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updateCompanyWebsite = async (
+    companyName: string,
+    newWebsite: string
+  ) => {
+    setLastSaveError(null);
+    setIsSaving(true);
+
+    try {
+      // Update the selected company
+      if (selectedCompany && selectedCompany.name === companyName) {
+        setSelectedCompany({
+          ...selectedCompany,
+          website: newWebsite.trim(),
+        });
+      }
+
+      setEditingCompanyWebsite(false);
+      console.log(`Company website updated successfully for ${companyName}`);
+    } catch (error) {
+      console.error("Error updating company website:", error);
+      setLastSaveError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update company website"
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const openWebsite = (website: string) => {
+    if (website && website !== "https://company.com") {
+      // Add https:// if not present
+      const url = website.startsWith("http") ? website : `https://${website}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const openGmail = (contact: Contact) => {
+    // Create Gmail search URL to find emails from this contact
+    const searchQuery = `from:${contact.email}`;
+    const gmailUrl = `https://mail.google.com/mail/u/0/#search/${encodeURIComponent(
+      searchQuery
+    )}`;
+    window.open(gmailUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const openCalendar = (contact: Contact) => {
+    // Create Google Calendar search URL to find meetings with this contact
+    const searchQuery = contact.email;
+    const calendarUrl = `https://calendar.google.com/calendar/u/0/r/search?q=${encodeURIComponent(
+      searchQuery
+    )}`;
+    window.open(calendarUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const updateCompanyHidden = async (companyName: string, hidden: boolean) => {
+    setLastSaveError(null);
+    setIsSaving(true);
+
+    try {
+      // Update all contacts that belong to this company
+      const updatedContacts = contacts.map((contact) =>
+        contact.company === companyName
+          ? { ...contact, hidden: hidden }
+          : contact
+      );
+
+      setContacts(updatedContacts);
+
+      // Update the selected company
+      if (selectedCompany && selectedCompany.name === companyName) {
+        setSelectedCompany({
+          ...selectedCompany,
+          hidden: hidden,
+          contacts: selectedCompany.contacts.map((contact) => ({
+            ...contact,
+            hidden: hidden,
+          })),
+        });
+      }
+
+      // Save changes to the server for each contact
+      const contactsToUpdate = contacts.filter(
+        (contact) => contact.company === companyName
+      );
+
+      const responses = await Promise.all(
+        contactsToUpdate.map((contact) =>
+          fetch(`/api/contacts/${contact.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: contact.name,
+              email: contact.email,
+              company: contact.company,
+              hidden: hidden,
+            }),
+          })
+        )
+      );
+
+      // Check if all requests were successful
+      const failedRequests = responses.filter((response) => !response.ok);
+      if (failedRequests.length > 0) {
+        throw new Error(`Failed to update ${failedRequests.length} contact(s)`);
+      }
+
+      console.log(
+        `Company ${hidden ? "hidden" : "shown"} successfully for ${
+          contactsToUpdate.length
+        } contacts`
+      );
+    } catch (error) {
+      console.error("Error updating company hidden state:", error);
+      setLastSaveError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update company visibility"
+      );
+
+      // Revert changes on error
+      setContacts(contacts);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -268,6 +466,8 @@ export default function Home() {
           contactCount: 0,
           lastContact: contact.lastContact,
           contacts: [],
+          hidden: false,
+          website: generateCompanyWebsite(companyName),
         });
       }
 
@@ -293,7 +493,13 @@ export default function Home() {
       }
     });
 
-    return Array.from(companiesMap.values());
+    // Calculate company hidden state based on all contacts being hidden
+    const companies = Array.from(companiesMap.values());
+    companies.forEach((company) => {
+      company.hidden = company.contacts.every((contact) => contact.hidden);
+    });
+
+    return companies;
   };
 
   const sortCompanies = (companies: Company[]) => {
@@ -418,10 +624,12 @@ export default function Home() {
     const checkAndSync = () => {
       const cachedTime = localStorage.getItem("rolodex-contacts-time");
       if (cachedTime) {
-        const hourAgo = Date.now() - 60 * 60 * 1000; // 1 hour ago
-        if (parseInt(cachedTime) <= hourAgo) {
-          console.log("Auto-sync: Cache expired, fetching new contacts");
-          fetchContacts();
+        const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000; // 6 hours ago
+        if (parseInt(cachedTime) <= sixHoursAgo) {
+          console.log(
+            "Auto-sync: Cache expired, fetching new contacts in background"
+          );
+          fetchContacts(true); // Background sync
         }
       }
     };
@@ -436,13 +644,13 @@ export default function Home() {
   }, [session]);
 
   const loadContacts = async () => {
-    // Check if we have cached contacts (less than 1 hour old)
+    // Check if we have cached contacts (less than 6 hours old)
     const cachedContacts = localStorage.getItem("rolodex-contacts");
     const cachedTime = localStorage.getItem("rolodex-contacts-time");
 
     if (cachedContacts && cachedTime) {
-      const hourAgo = Date.now() - 60 * 60 * 1000; // 1 hour ago
-      if (parseInt(cachedTime) > hourAgo) {
+      const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000; // 6 hours ago
+      if (parseInt(cachedTime) > sixHoursAgo) {
         console.log("Loading contacts from cache");
         const baseContacts = JSON.parse(cachedContacts);
         const contactsWithEdits = await applyEditsToContacts(baseContacts);
@@ -455,8 +663,12 @@ export default function Home() {
     fetchContacts();
   };
 
-  const fetchContacts = async () => {
-    setLoading(true);
+  const fetchContacts = async (background = false) => {
+    if (background) {
+      setBackgroundSyncing(true);
+    } else {
+      setLoading(true);
+    }
     try {
       // Check if we have a valid session with access token
       const sessionWithToken = session as {
@@ -513,6 +725,7 @@ export default function Home() {
       localStorage.removeItem("rolodex-contacts-time");
     } finally {
       setLoading(false);
+      setBackgroundSyncing(false);
     }
   };
 
@@ -521,6 +734,8 @@ export default function Home() {
     setEditedContact({ ...contact });
     setEditingName(false);
     setEditingEmail(false);
+    setLastSaveError(null);
+    setIsSaving(false);
     setIsSheetOpen(true);
   };
 
@@ -529,27 +744,85 @@ export default function Home() {
       clearTimeout(saveTimeout);
     }
 
+    setLastSaveError(null);
+    setIsSaving(true);
+
     const timeout = setTimeout(async () => {
       try {
-        await fetch(`/api/contacts/${contact.id}`, {
+        console.log("Saving contact:", contact.id, {
+          name: contact.name,
+          email: contact.email,
+          company: contact.company,
+          hidden: contact.hidden,
+        });
+
+        const response = await fetch(`/api/contacts/${contact.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: contact.name,
             email: contact.email,
             company: contact.company,
+            hidden: contact.hidden,
           }),
         });
+
+        console.log("Response status:", response.status);
+        console.log("Response headers:", response.headers);
+
+        if (!response.ok) {
+          const responseText = await response.text();
+          console.error("Error response text:", responseText);
+
+          let errorData;
+          try {
+            errorData = JSON.parse(responseText);
+          } catch (parseError) {
+            console.error(
+              "Failed to parse error response as JSON:",
+              parseError
+            );
+            throw new Error(
+              `Server error: ${response.status} - ${responseText}`
+            );
+          }
+
+          throw new Error(errorData.error || "Failed to save contact");
+        }
+
+        // Parse the successful response
+        const responseText = await response.text();
+        console.log("Success response text:", responseText);
+
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+          console.log("Parsed response data:", responseData);
+        } catch (parseError) {
+          console.error(
+            "Failed to parse success response as JSON:",
+            parseError
+          );
+          // If we can't parse the response but the status is ok, assume success
+          console.log("Assuming success despite parse error");
+        }
 
         // Update the contact in the contacts array
         const updatedContacts = contacts.map((c) =>
           c.id === contact.id ? contact : c
         );
         setContacts(updatedContacts);
+
+        console.log("Contact saved successfully");
       } catch (error) {
         console.error("Error saving contact:", error);
+        setLastSaveError(
+          error instanceof Error ? error.message : "Failed to save contact"
+        );
+      } finally {
+        setIsSaving(false);
       }
-    }, 500); // 500ms debounce
+    }, 300); // Reduced debounce time to 300ms for better UX
 
     setSaveTimeout(timeout);
   };
@@ -564,17 +837,30 @@ export default function Home() {
     setEditingName(false);
     setEditingEmail(false);
     setSaveTimeout(null);
+    setLastSaveError(null);
+    setIsSaving(false);
   };
 
-  const filteredContacts = contacts.filter(
-    (contact) =>
+  const filteredContacts = contacts.filter((contact) => {
+    const matchesSearch =
       contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (contact.company || "").toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      (contact.company || "").toLowerCase().includes(searchTerm.toLowerCase());
+
+    const isVisible = showHidden || !contact.hidden;
+
+    return matchesSearch && isVisible;
+  });
 
   const filteredCompanies = groupContactsByCompany(filteredContacts).filter(
-    (company) => company.name.toLowerCase().includes(searchTerm.toLowerCase())
+    (company) => {
+      const matchesSearch = company.name
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
+      const isVisible = showHidden || !company.hidden;
+
+      return matchesSearch && isVisible;
+    }
   );
 
   if (status === "loading") {
@@ -603,6 +889,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen p-8">
+      {backgroundSyncing && (
+        <div className="fixed top-4 right-4 z-50 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm text-blue-800 shadow-sm">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            <span>Updating contacts in background...</span>
+          </div>
+        </div>
+      )}
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-6">
@@ -636,15 +930,33 @@ export default function Home() {
               }
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
+              className="max-w-sm h-8"
             />
             <Button
-              onClick={fetchContacts}
+              onClick={() => setShowHidden(!showHidden)}
+              variant={showHidden ? "default" : "outline"}
+              size="sm"
+              title={showHidden ? "Hide hidden rows" : "Show hidden rows"}
+            >
+              {showHidden ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              onClick={() => fetchContacts()}
               variant="outline"
               size="sm"
-              disabled={loading}
+              disabled={loading || backgroundSyncing}
+              className="relative"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw
+                className={`h-4 w-4 ${backgroundSyncing ? "animate-spin" : ""}`}
+              />
+              {backgroundSyncing && (
+                <span className="absolute -top-1 -right-1 h-2 w-2 bg-blue-500 rounded-full animate-pulse"></span>
+              )}
             </Button>
             <Button
               onClick={() => router.push("/settings")}
@@ -662,7 +974,7 @@ export default function Home() {
               Syncing contacts from Google...
             </div>
             <div className="text-xs text-gray-400 mt-2">
-              This may take 15-30 seconds
+              Fetching recent emails and calendar events (5-10 seconds)
             </div>
           </div>
         ) : (
@@ -800,10 +1112,28 @@ export default function Home() {
 
       {/* Company Detail Sheet */}
       <Sheet open={isCompanySheetOpen} onOpenChange={setIsCompanySheetOpen}>
-        <SheetContent className="w-[500px] sm:w-[700px] lg:w-[800px] overflow-y-auto">
+        <SheetContent className="w-[400px] sm:w-[500px] lg:w-[600px] max-w-[90vw] overflow-y-auto">
           {selectedCompany && (
             <>
               <SheetHeader className="space-y-3">
+                <SheetTitle className="sr-only">Company Details</SheetTitle>
+
+                {/* Save Status Indicator */}
+                {(isSaving || lastSaveError) && (
+                  <div className="flex items-center gap-2 text-sm">
+                    {isSaving ? (
+                      <div className="flex items-center gap-2 text-blue-600">
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                        <span>Saving...</span>
+                      </div>
+                    ) : lastSaveError ? (
+                      <div className="flex items-center gap-2 text-red-600">
+                        <span>⚠️ {lastSaveError}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
                 <div className="space-y-1">
                   {editingCompanyName ? (
                     <Input
@@ -843,10 +1173,76 @@ export default function Home() {
                       {selectedCompany.name}
                     </SheetTitle>
                   )}
+
+                  {editingCompanyWebsite ? (
+                    <Input
+                      value={selectedCompany.website || ""}
+                      onChange={(e) =>
+                        setSelectedCompany({
+                          ...selectedCompany,
+                          website: e.target.value,
+                        })
+                      }
+                      onBlur={() => {
+                        updateCompanyWebsite(
+                          selectedCompany.name,
+                          selectedCompany.website || ""
+                        );
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          updateCompanyWebsite(
+                            selectedCompany.name,
+                            selectedCompany.website || ""
+                          );
+                        }
+                      }}
+                      className="text-sm text-muted-foreground !border-0 !outline-0 border-none px-0 py-1 bg-transparent focus:ring-0 focus:border-none focus:outline-none focus:shadow-none focus:bg-transparent shadow-none h-auto min-h-0 rounded-none focus:ring-offset-0 focus:!border-0 focus:!outline-0"
+                      placeholder="https://company.com"
+                      autoFocus
+                    />
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="text-sm text-muted-foreground cursor-pointer px-0 py-1 rounded flex-1"
+                        onClick={() => setEditingCompanyWebsite(true)}
+                      >
+                        {selectedCompany.website || "https://company.com"}
+                      </div>
+                      {selectedCompany.website &&
+                        selectedCompany.website !== "https://company.com" && (
+                          <button
+                            onClick={() =>
+                              openWebsite(selectedCompany.website!)
+                            }
+                            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
+                            title="Open website"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </button>
+                        )}
+                    </div>
+                  )}
                 </div>
               </SheetHeader>
 
               <div className="mt-6 space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium text-muted-foreground">
+                        Hide Company
+                      </Label>
+                    </div>
+                    <Switch
+                      checked={selectedCompany.hidden || false}
+                      onCheckedChange={(checked) => {
+                        updateCompanyHidden(selectedCompany.name, checked);
+                      }}
+                    />
+                  </div>
+                </div>
+
                 <h3 className="font-medium text-sm text-muted-foreground">
                   Contacts
                 </h3>
@@ -883,11 +1279,12 @@ export default function Home() {
 
       {/* Contact Edit Sheet */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent className="w-[500px] sm:w-[700px] lg:w-[800px] overflow-y-auto">
+        <SheetContent className="w-[400px] sm:w-[500px] lg:w-[600px] max-w-[90vw] overflow-y-auto">
           {editedContact && (
             <>
               <SheetHeader className="space-y-3">
                 <SheetTitle className="sr-only">Edit Contact</SheetTitle>
+
                 <div className="space-y-1">
                   {editingName ? (
                     <Input
@@ -898,11 +1295,14 @@ export default function Home() {
                           name: e.target.value,
                         };
                         setEditedContact(updatedContact);
-                        saveContactDebounced(updatedContact);
                       }}
-                      onBlur={() => setEditingName(false)}
+                      onBlur={() => {
+                        saveContactDebounced(editedContact);
+                        setEditingName(false);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
+                          saveContactDebounced(editedContact);
                           setEditingName(false);
                         }
                       }}
@@ -928,11 +1328,14 @@ export default function Home() {
                           email: e.target.value,
                         };
                         setEditedContact(updatedContact);
-                        saveContactDebounced(updatedContact);
                       }}
-                      onBlur={() => setEditingEmail(false)}
+                      onBlur={() => {
+                        saveContactDebounced(editedContact);
+                        setEditingEmail(false);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
+                          saveContactDebounced(editedContact);
                           setEditingEmail(false);
                         }
                       }}
@@ -965,10 +1368,41 @@ export default function Home() {
                         company: e.target.value,
                       };
                       setEditedContact(updatedContact);
-                      saveContactDebounced(updatedContact);
+                    }}
+                    onBlur={() => {
+                      saveContactDebounced(editedContact);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        saveContactDebounced(editedContact);
+                      }
                     }}
                     placeholder="Company name"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">
+                        Hide Contact
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Contact will not appear in the table
+                      </p>
+                    </div>
+                    <Switch
+                      checked={editedContact.hidden || false}
+                      onCheckedChange={(checked) => {
+                        const updatedContact = {
+                          ...editedContact,
+                          hidden: checked,
+                        };
+                        setEditedContact(updatedContact);
+                        saveContactDebounced(updatedContact);
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -981,17 +1415,29 @@ export default function Home() {
                           <div className="bg-muted/50 border border-input rounded-md px-3 py-2 text-sm space-y-2 overflow-hidden relative">
                             <div className="absolute top-2 right-2">
                               {editedContact.source === "Gmail" ? (
-                                <img
-                                  src="/icons/gmail.png"
-                                  alt="Gmail"
-                                  className="h-4 w-4"
-                                />
+                                <button
+                                  onClick={() => openGmail(editedContact)}
+                                  className="hover:bg-muted/50 p-1 rounded transition-colors"
+                                  title="Open in Gmail"
+                                >
+                                  <img
+                                    src="/icons/gmail.png"
+                                    alt="Gmail"
+                                    className="h-4 w-4"
+                                  />
+                                </button>
                               ) : editedContact.source === "Calendar" ? (
-                                <img
-                                  src="/icons/calendar.png"
-                                  alt="Calendar"
-                                  className="h-4 w-4"
-                                />
+                                <button
+                                  onClick={() => openCalendar(editedContact)}
+                                  className="hover:bg-muted/50 p-1 rounded transition-colors"
+                                  title="Open in Google Calendar"
+                                >
+                                  <img
+                                    src="/icons/calendar.png"
+                                    alt="Calendar"
+                                    className="h-4 w-4"
+                                  />
+                                </button>
                               ) : (
                                 <div className="h-4 w-4 bg-muted-foreground rounded-full" />
                               )}
@@ -1024,6 +1470,22 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+
+              {/* Save Status Indicator - Bottom of Sheet */}
+              {(isSaving || lastSaveError) && (
+                <div className="flex items-center justify-center gap-2 text-sm p-4 border-t bg-muted/20">
+                  {isSaving ? (
+                    <div className="flex items-center gap-2 text-blue-600">
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                      <span>Saving...</span>
+                    </div>
+                  ) : lastSaveError ? (
+                    <div className="flex items-center gap-2 text-red-600">
+                      <span>⚠️ {lastSaveError}</span>
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </>
           )}
         </SheetContent>

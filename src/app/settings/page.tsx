@@ -35,6 +35,13 @@ export default function Settings() {
     }
   }, []);
 
+  // Handle redirect when there's no session
+  useEffect(() => {
+    if (status !== "loading" && !session) {
+      router.push("/");
+    }
+  }, [session, status, router]);
+
   const handleAutoSyncToggle = (enabled: boolean) => {
     setAutoSyncEnabled(enabled);
     localStorage.setItem("rolodex-auto-sync", enabled.toString());
@@ -93,8 +100,11 @@ export default function Settings() {
   }
 
   if (!session) {
-    router.push("/");
-    return null;
+    return (
+      <div className="min-h-screen p-8">
+        <div className="max-w-2xl mx-auto">Redirecting...</div>
+      </div>
+    );
   }
 
   return (
