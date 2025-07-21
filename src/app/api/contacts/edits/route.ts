@@ -8,6 +8,8 @@ interface ContactEdit {
   email?: string
   company?: string
   hidden?: boolean
+  starred?: boolean
+  tags?: string[]
   updatedAt?: Timestamp | string
 }
 
@@ -68,7 +70,9 @@ export async function POST(request: NextRequest) {
       name: body.name,
       email: body.email,
       company: body.company,
-      hidden: body.hidden
+      hidden: body.hidden,
+      starred: body.starred,
+      tags: body.tags
     }
     
     await saveEdit(edit)

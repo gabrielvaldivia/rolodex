@@ -44,6 +44,8 @@ import {
   Edit,
   Palette,
   Pencil,
+  TableProperties,
+  LayoutGrid,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -80,6 +82,7 @@ interface ContactEdit {
 type SortField = "name" | "email" | "company" | "lastContact" | "tags";
 type SortDirection = "asc" | "desc";
 type View = "contacts" | "companies";
+type ViewType = "table" | "kanban";
 
 interface Company {
   name: string;
@@ -414,6 +417,210 @@ const TagDisplay: React.FC<TagDisplayProps> = ({
   );
 };
 
+// Kanban Card Component
+interface KanbanCardProps {
+  item: Contact | Company;
+  type: "contact" | "company";
+  customColors: Record<string, { bg: string; text: string; border: string }>;
+  onClick: () => void;
+}
+
+const KanbanCard: React.FC<KanbanCardProps> = ({
+  item,
+  type,
+  customColors,
+  onClick,
+}) => {
+  const name =
+    type === "contact" ? (item as Contact).name : (item as Company).name;
+  const lastContact = item.lastContact;
+  const tags = item.tags || [];
+
+  return (
+    <div
+      onClick={onClick}
+      className="bg-white border rounded-lg p-3 mb-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+    >
+      <div className="flex items-start justify-between mb-2">
+        <h4 className="font-medium text-sm truncate flex-1">{name}</h4>
+        {item.starred && (
+          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400 flex-shrink-0 ml-1" />
+        )}
+      </div>
+
+      <div className="text-xs text-muted-foreground mb-2">
+        {formatRelativeDate(lastContact)}
+      </div>
+
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {tags.slice(0, 2).map((tag) => {
+            const colors = getTagColor(tag, customColors);
+            return (
+              <span
+                key={tag}
+                className={`inline-flex items-center px-1.5 py-0.5 text-xs rounded ${colors.bg} ${colors.text}`}
+                title={tag}
+              >
+                <span className="max-w-12 truncate">{tag}</span>
+              </span>
+            );
+          })}
+          {tags.length > 2 && (
+            <span className="text-xs text-muted-foreground">
+              +{tags.length - 2}
+            </span>
+          )}
+        </div>
+      )}
+
+      {type === "company" && (
+        <div className="text-xs text-muted-foreground mt-1">
+          {(item as Company).contactCount} contact
+          {(item as Company).contactCount !== 1 ? "s" : ""}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Kanban Column Component
+interface KanbanColumnProps {
+  tag: string;
+  items: (Contact | Company)[];
+  type: "contact" | "company";
+  customColors: Record<string, { bg: string; text: string; border: string }>;
+  onContactClick: (contact: Contact) => void;
+  onCompanyClick: (company: Company) => void;
+}
+
+const KanbanColumn: React.FC<KanbanColumnProps> = ({
+  tag,
+  items,
+  type,
+  customColors,
+  onContactClick,
+  onCompanyClick,
+}) => {
+  const colors =
+    tag !== "No Tags"
+      ? getTagColor(tag, customColors)
+      : { bg: "bg-gray-100", text: "text-gray-800", border: "border-gray-200" };
+
+  return (
+    <div className="flex flex-col min-w-72 max-w-72 bg-gray-50 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-4">
+        {tag === "No Tags" ? (
+          <h3 className="font-medium text-sm text-gray-600">No Tags</h3>
+        ) : (
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-1 text-sm rounded ${colors.bg} ${colors.text} font-medium`}
+          >
+            {tag}
+          </span>
+        )}
+        <span className="text-xs text-muted-foreground bg-white px-2 py-1 rounded">
+          {items.length}
+        </span>
+      </div>
+
+      <div className="flex-1 min-h-32">
+        {items.map((item) => (
+          <KanbanCard
+            key={
+              type === "contact" ? (item as Contact).id : (item as Company).name
+            }
+            item={item}
+            type={type}
+            customColors={customColors}
+            onClick={() => {
+              if (type === "contact") {
+                onContactClick(item as Contact);
+              } else {
+                onCompanyClick(item as Company);
+              }
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Kanban Board Component
+interface KanbanBoardProps {
+  items: (Contact | Company)[];
+  type: "contact" | "company";
+  customColors: Record<string, { bg: string; text: string; border: string }>;
+  allTags: string[];
+  onContactClick: (contact: Contact) => void;
+  onCompanyClick: (company: Company) => void;
+}
+
+const KanbanBoard: React.FC<KanbanBoardProps> = ({
+  items,
+  type,
+  customColors,
+  allTags,
+  onContactClick,
+  onCompanyClick,
+}) => {
+  // Group items by tags
+  const tagGroups: Record<string, (Contact | Company)[]> = {};
+
+  // Initialize tag groups
+  allTags.forEach((tag) => {
+    tagGroups[tag] = [];
+  });
+
+  // Add "No Tags" group
+  tagGroups["No Tags"] = [];
+
+  // Sort items into tag groups
+  items.forEach((item) => {
+    const itemTags = item.tags || [];
+
+    if (itemTags.length === 0) {
+      tagGroups["No Tags"].push(item);
+    } else {
+      // Add item to each tag column it belongs to
+      itemTags.forEach((tag) => {
+        if (tagGroups[tag]) {
+          tagGroups[tag].push(item);
+        }
+      });
+    }
+  });
+
+  // Filter out empty tag groups (except "No Tags" which we always show if it has items)
+  const activeTagGroups = Object.entries(tagGroups).filter(
+    ([tag, items]) => items.length > 0 || tag === "No Tags"
+  );
+
+  // Sort tag groups: put "No Tags" at the end, then alphabetically
+  activeTagGroups.sort(([tagA], [tagB]) => {
+    if (tagA === "No Tags") return 1;
+    if (tagB === "No Tags") return -1;
+    return tagA.localeCompare(tagB);
+  });
+
+  return (
+    <div className="flex gap-4 overflow-x-auto pb-4">
+      {activeTagGroups.map(([tag, tagItems]) => (
+        <KanbanColumn
+          key={tag}
+          tag={tag}
+          items={tagItems}
+          type={type}
+          customColors={customColors}
+          onContactClick={onContactClick}
+          onCompanyClick={onCompanyClick}
+        />
+      ))}
+    </div>
+  );
+};
+
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -428,6 +635,7 @@ export default function Home() {
   const [sortField, setSortField] = useState<SortField>("lastContact");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentView, setCurrentView] = useState<View>("contacts");
+  const [viewType, setViewType] = useState<ViewType>("table");
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [isCompanySheetOpen, setIsCompanySheetOpen] = useState(false);
   const [editingCompanyName, setEditingCompanyName] = useState(false);
@@ -465,6 +673,10 @@ export default function Home() {
       }
 
       const editsObject = await response.json();
+      console.log(
+        "Loaded edits with tags:",
+        Object.values(editsObject).slice(0, 3)
+      );
 
       return baseContacts.map((contact) => {
         const edit = editsObject[contact.id];
@@ -1329,6 +1541,12 @@ export default function Home() {
 
       // Apply any existing edits to the contacts
       const contactsWithEdits = await applyEditsToContacts(data);
+      console.log(
+        "Contacts loaded with tags:",
+        contactsWithEdits
+          .map((c) => ({ id: c.id, name: c.name, tags: c.tags }))
+          .slice(0, 3)
+      );
       setContacts(contactsWithEdits);
 
       // Only cache non-empty contact arrays to prevent overwriting good data with auth failures
@@ -1403,7 +1621,11 @@ export default function Home() {
           email: contact.email,
           company: contact.company,
           hidden: contact.hidden,
+          starred: contact.starred,
+          tags: contact.tags || [],
         });
+
+        console.log("Contact tags before save:", contact.tags);
 
         const response = await fetch(`/api/contacts/${contact.id}`, {
           method: "PUT",
@@ -1600,6 +1822,32 @@ export default function Home() {
             >
               {filteredCompanies.length} Companies
             </h1>
+
+            {/* View Type Toggle */}
+            <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
+              <button
+                onClick={() => setViewType("table")}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-sm transition-colors ${
+                  viewType === "table"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <TableProperties className="h-3 w-3" />
+                Table
+              </button>
+              <button
+                onClick={() => setViewType("kanban")}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-sm transition-colors ${
+                  viewType === "kanban"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <LayoutGrid className="h-3 w-3" />
+                Kanban
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative max-w-sm">
@@ -1804,8 +2052,32 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <div className="w-full overflow-x-auto">
-            {currentView === "contacts" ? (
+          <div
+            className={`w-full ${
+              viewType === "table" ? "overflow-x-auto" : ""
+            }`}
+          >
+            {viewType === "kanban" ? (
+              currentView === "contacts" ? (
+                <KanbanBoard
+                  items={sortContacts(filteredContacts)}
+                  type="contact"
+                  customColors={customTagColors}
+                  allTags={allTags}
+                  onContactClick={handleContactClick}
+                  onCompanyClick={handleCompanyClick}
+                />
+              ) : (
+                <KanbanBoard
+                  items={sortCompanies(filteredCompanies)}
+                  type="company"
+                  customColors={customTagColors}
+                  allTags={allTags}
+                  onContactClick={handleContactClick}
+                  onCompanyClick={handleCompanyClick}
+                />
+              )
+            ) : currentView === "contacts" ? (
               <Table className="table-fixed w-full">
                 <TableHeader>
                   <TableRow>

@@ -10,6 +10,8 @@ interface ContactEdit {
   email?: string
   company?: string
   hidden?: boolean
+  starred?: boolean
+  tags?: string[]
   updatedAt?: Timestamp | string
 }
 
@@ -80,7 +82,9 @@ export async function PUT(
       name: body.name || '',
       email: body.email || '',
       company: body.company || '',
-      hidden: body.hidden || false
+      hidden: body.hidden || false,
+      starred: body.starred || false,
+      tags: body.tags || []
     }
 
     await saveEdit(newEdit)
