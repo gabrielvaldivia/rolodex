@@ -723,7 +723,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
+    <div className="flex gap-4 pb-4">
       {activeTagGroups.map(([tag, tagItems]) => (
         <KanbanColumn
           key={tag}
@@ -2088,7 +2088,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen py-8">
       {backgroundSyncing && (
         <div className="fixed top-4 right-4 z-50 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm text-blue-800 shadow-sm">
           <div className="flex items-center gap-2">
@@ -2097,8 +2097,8 @@ export default function Home() {
           </div>
         </div>
       )}
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+      <div className="">
+        <div className="flex items-center justify-between mb-8 px-8">
           <div className="flex items-center gap-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -2371,7 +2371,7 @@ export default function Home() {
         </div>
 
         {loading ? (
-          <div className="text-center py-8">
+          <div className="text-center py-8 px-8">
             <div className="text-sm text-muted-foreground">
               Syncing contacts from Google...
             </div>
@@ -2380,262 +2380,271 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <div
-            className={`w-full ${
-              viewType === "table" ? "overflow-x-auto" : ""
-            }`}
-          >
+          <div className="w-full">
             {viewType === "kanban" ? (
-              currentView === "contacts" ? (
-                <KanbanBoard
-                  items={sortContacts(filteredContacts)}
-                  type="contact"
-                  customColors={customTagColors}
-                  allTags={allTags}
-                  columnOrder={columnOrder}
-                  onContactClick={handleContactClick}
-                  onCompanyClick={handleCompanyClick}
-                  onColumnReorder={saveColumnOrder}
-                  onCardMove={handleCardMove}
-                />
-              ) : (
-                <KanbanBoard
-                  items={sortCompanies(filteredCompanies)}
-                  type="company"
-                  customColors={customTagColors}
-                  allTags={allTags}
-                  columnOrder={columnOrder}
-                  onContactClick={handleContactClick}
-                  onCompanyClick={handleCompanyClick}
-                  onColumnReorder={saveColumnOrder}
-                  onCardMove={handleCardMove}
-                />
-              )
+              <div className="overflow-x-auto pl-8">
+                {currentView === "contacts" ? (
+                  <KanbanBoard
+                    items={sortContacts(filteredContacts)}
+                    type="contact"
+                    customColors={customTagColors}
+                    allTags={allTags}
+                    columnOrder={columnOrder}
+                    onContactClick={handleContactClick}
+                    onCompanyClick={handleCompanyClick}
+                    onColumnReorder={saveColumnOrder}
+                    onCardMove={handleCardMove}
+                  />
+                ) : (
+                  <KanbanBoard
+                    items={sortCompanies(filteredCompanies)}
+                    type="company"
+                    customColors={customTagColors}
+                    allTags={allTags}
+                    columnOrder={columnOrder}
+                    onContactClick={handleContactClick}
+                    onCompanyClick={handleCompanyClick}
+                    onColumnReorder={saveColumnOrder}
+                    onCardMove={handleCardMove}
+                  />
+                )}
+              </div>
             ) : currentView === "contacts" ? (
-              <Table className="table-fixed w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12 text-center"></TableHead>
-                    <TableHead
-                      onClick={() => handleSort("name")}
-                      className="cursor-pointer hover:bg-muted/50 w-[15%]"
-                    >
-                      Name {getSortIcon("name")}
-                    </TableHead>
-                    <TableHead
-                      onClick={() => handleSort("email")}
-                      className="cursor-pointer hover:bg-muted/50 w-[25%]"
-                    >
-                      Email {getSortIcon("email")}
-                    </TableHead>
-                    <TableHead
-                      onClick={() => handleSort("company")}
-                      className="cursor-pointer hover:bg-muted/50 w-[15%]"
-                    >
-                      Company {getSortIcon("company")}
-                    </TableHead>
-                    <TableHead
-                      onClick={() => handleSort("tags")}
-                      className="cursor-pointer hover:bg-muted/50 w-[20%]"
-                    >
-                      Tags {getSortIcon("tags")}
-                    </TableHead>
-                    <TableHead className="w-12 text-center">Source</TableHead>
-                    <TableHead
-                      onClick={() => handleSort("lastContact")}
-                      className="cursor-pointer hover:bg-muted/50 whitespace-nowrap w-[15%] text-right"
-                    >
-                      Last Contact {getSortIcon("lastContact")}
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortContacts(filteredContacts).map((contact) => (
-                    <TableRow
-                      key={contact.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                    >
-                      <TableCell className="text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateContactStarred(contact.id, !contact.starred);
-                          }}
-                          className="hover:bg-muted/50 p-1 rounded transition-colors"
-                          title={
-                            contact.starred ? "Unstar contact" : "Star contact"
-                          }
-                        >
-                          <Star
-                            className={`h-4 w-4 ${
+              <div className="overflow-x-auto px-8">
+                <Table className="w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12 text-center"></TableHead>
+                      <TableHead
+                        onClick={() => handleSort("name")}
+                        className="cursor-pointer hover:bg-muted/50 min-w-40"
+                      >
+                        Name {getSortIcon("name")}
+                      </TableHead>
+                      <TableHead
+                        onClick={() => handleSort("email")}
+                        className="cursor-pointer hover:bg-muted/50 min-w-60"
+                      >
+                        Email {getSortIcon("email")}
+                      </TableHead>
+                      <TableHead
+                        onClick={() => handleSort("company")}
+                        className="cursor-pointer hover:bg-muted/50 min-w-40"
+                      >
+                        Company {getSortIcon("company")}
+                      </TableHead>
+                      <TableHead
+                        onClick={() => handleSort("tags")}
+                        className="cursor-pointer hover:bg-muted/50 min-w-40"
+                      >
+                        Tags {getSortIcon("tags")}
+                      </TableHead>
+                      <TableHead className="w-12 text-center">Source</TableHead>
+                      <TableHead
+                        onClick={() => handleSort("lastContact")}
+                        className="cursor-pointer hover:bg-muted/50 whitespace-nowrap min-w-32 text-right"
+                      >
+                        Last Contact {getSortIcon("lastContact")}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortContacts(filteredContacts).map((contact) => (
+                      <TableRow
+                        key={contact.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                      >
+                        <TableCell className="text-center">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateContactStarred(
+                                contact.id,
+                                !contact.starred
+                              );
+                            }}
+                            className="hover:bg-muted/50 p-1 rounded transition-colors"
+                            title={
                               contact.starred
-                                ? "fill-yellow-400 text-yellow-400"
-                                : "text-gray-400 hover:text-yellow-400"
-                            }`}
-                          />
-                        </button>
-                      </TableCell>
-                      <TableCell
-                        className="font-medium truncate pr-4"
-                        onClick={() => handleContactClick(contact)}
-                      >
-                        <span className="truncate">{contact.name}</span>
-                      </TableCell>
-                      <TableCell
-                        className="text-muted-foreground truncate pr-4"
-                        onClick={() => handleContactClick(contact)}
-                      >
-                        {contact.email}
-                      </TableCell>
-                      <TableCell
-                        className="text-muted-foreground truncate pr-4"
-                        onClick={() => handleContactClick(contact)}
-                      >
-                        <span className="truncate">
-                          {contact.company || "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell
-                        className="pr-4"
-                        onClick={() => handleContactClick(contact)}
-                      >
-                        <TagDisplay
-                          tags={contact.tags || []}
-                          maxDisplay={2}
-                          customColors={customTagColors}
-                        />
-                      </TableCell>
-                      <TableCell
-                        className="text-center"
-                        onClick={() => handleContactClick(contact)}
-                      >
-                        <div className="flex justify-center">
-                          {contact.source === "Gmail" ? (
-                            <img
-                              src="/icons/gmail.png"
-                              alt="Gmail"
-                              className="h-4 w-4"
+                                ? "Unstar contact"
+                                : "Star contact"
+                            }
+                          >
+                            <Star
+                              className={`h-4 w-4 ${
+                                contact.starred
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "text-gray-400 hover:text-yellow-400"
+                              }`}
                             />
-                          ) : contact.source === "Calendar" ? (
-                            <img
-                              src="/icons/calendar.png"
-                              alt="Calendar"
-                              className="h-4 w-4"
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              —
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell
-                        className="text-muted-foreground whitespace-nowrap text-right"
-                        onClick={() => handleContactClick(contact)}
-                      >
-                        <span className="text-sm">
-                          {formatRelativeDate(contact.lastContact)}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <Table className="table-fixed w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12 text-center"></TableHead>
-                    <TableHead
-                      onClick={() => handleSort("name")}
-                      className="cursor-pointer hover:bg-muted/50 w-[25%]"
-                    >
-                      Company {getSortIcon("name")}
-                    </TableHead>
-                    <TableHead
-                      onClick={() => handleSort("company")}
-                      className="cursor-pointer hover:bg-muted/50 w-[15%]"
-                    >
-                      Contacts {getSortIcon("company")}
-                    </TableHead>
-                    <TableHead
-                      onClick={() => handleSort("tags")}
-                      className="cursor-pointer hover:bg-muted/50 w-[25%]"
-                    >
-                      Tags {getSortIcon("tags")}
-                    </TableHead>
-                    <TableHead
-                      onClick={() => handleSort("lastContact")}
-                      className="cursor-pointer hover:bg-muted/50 whitespace-nowrap w-[25%] text-right"
-                    >
-                      Last Contact {getSortIcon("lastContact")}
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortCompanies(filteredCompanies).map((company) => (
-                    <TableRow
-                      key={company.name}
-                      className="cursor-pointer hover:bg-muted/50"
-                    >
-                      <TableCell className="text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateCompanyStarred(
-                              company.name,
-                              !company.starred
-                            );
-                          }}
-                          className="hover:bg-muted/50 p-1 rounded transition-colors"
-                          title={
-                            company.starred ? "Unstar company" : "Star company"
-                          }
+                          </button>
+                        </TableCell>
+                        <TableCell
+                          className="font-medium truncate pr-4"
+                          onClick={() => handleContactClick(contact)}
                         >
-                          <Star
-                            className={`h-4 w-4 ${
-                              company.starred
-                                ? "fill-yellow-400 text-yellow-400"
-                                : "text-gray-400 hover:text-yellow-400"
-                            }`}
+                          <span className="truncate">{contact.name}</span>
+                        </TableCell>
+                        <TableCell
+                          className="text-muted-foreground truncate pr-4"
+                          onClick={() => handleContactClick(contact)}
+                        >
+                          {contact.email}
+                        </TableCell>
+                        <TableCell
+                          className="text-muted-foreground truncate pr-4"
+                          onClick={() => handleContactClick(contact)}
+                        >
+                          <span className="truncate">
+                            {contact.company || "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell
+                          className="pr-4"
+                          onClick={() => handleContactClick(contact)}
+                        >
+                          <TagDisplay
+                            tags={contact.tags || []}
+                            maxDisplay={2}
+                            customColors={customTagColors}
                           />
-                        </button>
-                      </TableCell>
-                      <TableCell
-                        className="font-medium truncate pr-4"
-                        onClick={() => handleCompanyClick(company)}
+                        </TableCell>
+                        <TableCell
+                          className="text-center"
+                          onClick={() => handleContactClick(contact)}
+                        >
+                          <div className="flex justify-center">
+                            {contact.source === "Gmail" ? (
+                              <img
+                                src="/icons/gmail.png"
+                                alt="Gmail"
+                                className="h-4 w-4"
+                              />
+                            ) : contact.source === "Calendar" ? (
+                              <img
+                                src="/icons/calendar.png"
+                                alt="Calendar"
+                                className="h-4 w-4"
+                              />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                —
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell
+                          className="text-muted-foreground whitespace-nowrap text-right"
+                          onClick={() => handleContactClick(contact)}
+                        >
+                          <span className="text-sm">
+                            {formatRelativeDate(contact.lastContact)}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <div className="overflow-x-auto px-8">
+                <Table className="w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12 text-center"></TableHead>
+                      <TableHead
+                        onClick={() => handleSort("name")}
+                        className="cursor-pointer hover:bg-muted/50 min-w-48"
                       >
-                        <span className="truncate">{company.name}</span>
-                      </TableCell>
-                      <TableCell
-                        className="text-muted-foreground truncate pr-4"
-                        onClick={() => handleCompanyClick(company)}
+                        Company {getSortIcon("name")}
+                      </TableHead>
+                      <TableHead
+                        onClick={() => handleSort("company")}
+                        className="cursor-pointer hover:bg-muted/50 min-w-24"
                       >
-                        {company.contactCount} contact
-                        {company.contactCount !== 1 ? "s" : ""}
-                      </TableCell>
-                      <TableCell
-                        className="pr-4"
-                        onClick={() => handleCompanyClick(company)}
+                        Contacts {getSortIcon("company")}
+                      </TableHead>
+                      <TableHead
+                        onClick={() => handleSort("tags")}
+                        className="cursor-pointer hover:bg-muted/50 min-w-40"
                       >
-                        <TagDisplay
-                          tags={company.tags || []}
-                          maxDisplay={3}
-                          customColors={customTagColors}
-                        />
-                      </TableCell>
-                      <TableCell
-                        className="text-muted-foreground whitespace-nowrap text-right"
-                        onClick={() => handleCompanyClick(company)}
+                        Tags {getSortIcon("tags")}
+                      </TableHead>
+                      <TableHead
+                        onClick={() => handleSort("lastContact")}
+                        className="cursor-pointer hover:bg-muted/50 whitespace-nowrap min-w-32 text-right"
                       >
-                        <span className="text-sm">
-                          {formatRelativeDate(company.lastContact)}
-                        </span>
-                      </TableCell>
+                        Last Contact {getSortIcon("lastContact")}
+                      </TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {sortCompanies(filteredCompanies).map((company) => (
+                      <TableRow
+                        key={company.name}
+                        className="cursor-pointer hover:bg-muted/50"
+                      >
+                        <TableCell className="text-center">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateCompanyStarred(
+                                company.name,
+                                !company.starred
+                              );
+                            }}
+                            className="hover:bg-muted/50 p-1 rounded transition-colors"
+                            title={
+                              company.starred
+                                ? "Unstar company"
+                                : "Star company"
+                            }
+                          >
+                            <Star
+                              className={`h-4 w-4 ${
+                                company.starred
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "text-gray-400 hover:text-yellow-400"
+                              }`}
+                            />
+                          </button>
+                        </TableCell>
+                        <TableCell
+                          className="font-medium truncate pr-4"
+                          onClick={() => handleCompanyClick(company)}
+                        >
+                          <span className="truncate">{company.name}</span>
+                        </TableCell>
+                        <TableCell
+                          className="text-muted-foreground truncate pr-4"
+                          onClick={() => handleCompanyClick(company)}
+                        >
+                          {company.contactCount} contact
+                          {company.contactCount !== 1 ? "s" : ""}
+                        </TableCell>
+                        <TableCell
+                          className="pr-4"
+                          onClick={() => handleCompanyClick(company)}
+                        >
+                          <TagDisplay
+                            tags={company.tags || []}
+                            maxDisplay={3}
+                            customColors={customTagColors}
+                          />
+                        </TableCell>
+                        <TableCell
+                          className="text-muted-foreground whitespace-nowrap text-right"
+                          onClick={() => handleCompanyClick(company)}
+                        >
+                          <span className="text-sm">
+                            {formatRelativeDate(company.lastContact)}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </div>
         )}
