@@ -2027,9 +2027,12 @@ export default function Home() {
     const matchesStarred = !showStarred || contact.starred;
     const matchesTags =
       selectedTags.length === 0 ||
-      selectedTags.some((selectedTag) =>
-        (contact.tags || []).includes(selectedTag)
-      );
+      selectedTags.some((selectedTag) => {
+        if (selectedTag === "No Tags") {
+          return !contact.tags || contact.tags.length === 0;
+        }
+        return (contact.tags || []).includes(selectedTag);
+      });
 
     const matchesSource =
       (contact.source === "Gmail" && showGmail) ||
@@ -2055,9 +2058,12 @@ export default function Home() {
       const matchesStarred = !showStarred || company.starred;
       const matchesTags =
         selectedTags.length === 0 ||
-        selectedTags.some((selectedTag) =>
-          (company.tags || []).includes(selectedTag)
-        );
+        selectedTags.some((selectedTag) => {
+          if (selectedTag === "No Tags") {
+            return !company.tags || company.tags.length === 0;
+          }
+          return (company.tags || []).includes(selectedTag);
+        });
 
       return matchesSearch && isVisible && matchesStarred && matchesTags;
     }
@@ -2289,6 +2295,31 @@ export default function Home() {
                             </DropdownMenuItem>
                           );
                         })}
+
+                        {/* No Tags option */}
+                        <DropdownMenuItem
+                          onSelect={(e) => e.preventDefault()}
+                          onClick={() => {
+                            const noTagsFilter = "No Tags";
+                            if (selectedTags.includes(noTagsFilter)) {
+                              setSelectedTags(
+                                selectedTags.filter((t) => t !== noTagsFilter)
+                              );
+                            } else {
+                              setSelectedTags([...selectedTags, noTagsFilter]);
+                            }
+                          }}
+                          className="flex items-center gap-2 cursor-pointer text-xs"
+                        >
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded bg-gray-100 text-gray-800">
+                            <span className="truncate">No Tags</span>
+                          </span>
+                          <div className="flex items-center ml-auto">
+                            {selectedTags.includes("No Tags") && (
+                              <Check className="h-3 w-3" />
+                            )}
+                          </div>
+                        </DropdownMenuItem>
                         {allTags.length > 8 && (
                           <div className="text-xs text-muted-foreground px-2 py-1">
                             +{allTags.length - 8} more tags available
