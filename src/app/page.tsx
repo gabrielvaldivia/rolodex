@@ -2442,38 +2442,38 @@ export default function Home() {
               </div>
             ) : currentView === "contacts" ? (
               <div className="overflow-x-auto px-8">
-                <Table className="w-full">
+                <Table className="table-fixed w-full">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12 text-center"></TableHead>
                       <TableHead
                         onClick={() => handleSort("name")}
-                        className="cursor-pointer hover:bg-muted/50 min-w-40"
+                        className="cursor-pointer hover:bg-muted/50 w-[18%]"
                       >
                         Name {getSortIcon("name")}
                       </TableHead>
                       <TableHead
                         onClick={() => handleSort("email")}
-                        className="cursor-pointer hover:bg-muted/50 min-w-60"
+                        className="cursor-pointer hover:bg-muted/50 w-[22%]"
                       >
                         Email {getSortIcon("email")}
                       </TableHead>
                       <TableHead
                         onClick={() => handleSort("company")}
-                        className="cursor-pointer hover:bg-muted/50 min-w-40"
+                        className="cursor-pointer hover:bg-muted/50 w-[18%]"
                       >
                         Company {getSortIcon("company")}
                       </TableHead>
                       <TableHead
                         onClick={() => handleSort("tags")}
-                        className="cursor-pointer hover:bg-muted/50 min-w-40"
+                        className="cursor-pointer hover:bg-muted/50 w-[20%]"
                       >
                         Tags {getSortIcon("tags")}
                       </TableHead>
                       <TableHead className="w-12 text-center">Source</TableHead>
                       <TableHead
                         onClick={() => handleSort("lastContact")}
-                        className="cursor-pointer hover:bg-muted/50 whitespace-nowrap min-w-32 text-right"
+                        className="cursor-pointer hover:bg-muted/50 whitespace-nowrap w-[15%] text-right"
                       >
                         Last Contact {getSortIcon("lastContact")}
                       </TableHead>
