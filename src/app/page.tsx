@@ -36,7 +36,7 @@ import {
   Eye,
   EyeOff,
   X,
-  Filter,
+  SlidersHorizontal,
   Check,
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -1022,7 +1022,7 @@ export default function Home() {
                       : ""
                   }`}
                 >
-                  <Filter className="h-4 w-4" />
+                  <SlidersHorizontal className="h-4 w-4" />
                   {(!showGmail || !showCalendar || showHidden) && (
                     <span className="absolute -top-1 -right-1 h-2 w-2 bg-blue-500 rounded-full"></span>
                   )}
