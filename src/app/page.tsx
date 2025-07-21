@@ -3010,32 +3010,6 @@ export default function Home() {
               </SheetHeader>
 
               <div className="grid gap-6 py-6">
-                <div className="space-y-2">
-                  <Label htmlFor="company" className="text-sm font-medium">
-                    Company
-                  </Label>
-                  <Input
-                    id="company"
-                    value={editedContact.company || ""}
-                    onChange={(e) => {
-                      const updatedContact = {
-                        ...editedContact,
-                        company: e.target.value,
-                      };
-                      setEditedContact(updatedContact);
-                    }}
-                    onBlur={() => {
-                      saveContactDebounced(editedContact);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        saveContactDebounced(editedContact);
-                      }
-                    }}
-                    placeholder="Company name"
-                  />
-                </div>
-
                 <div className="flex gap-2">
                   <Button
                     variant={editedContact.starred ? "default" : "outline"}
@@ -3077,6 +3051,32 @@ export default function Home() {
                     )}
                     {editedContact.hidden ? "Hidden" : "Hide"}
                   </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="company" className="text-sm font-medium">
+                    Company
+                  </Label>
+                  <Input
+                    id="company"
+                    value={editedContact.company || ""}
+                    onChange={(e) => {
+                      const updatedContact = {
+                        ...editedContact,
+                        company: e.target.value,
+                      };
+                      setEditedContact(updatedContact);
+                    }}
+                    onBlur={() => {
+                      saveContactDebounced(editedContact);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        saveContactDebounced(editedContact);
+                      }
+                    }}
+                    placeholder="Company name"
+                  />
                 </div>
 
                 <div className="space-y-2">
