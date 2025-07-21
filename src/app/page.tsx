@@ -422,14 +422,18 @@ interface KanbanCardProps {
   item: Contact | Company;
   type: "contact" | "company";
   customColors: Record<string, { bg: string; text: string; border: string }>;
+  columnTag: string;
   onClick: () => void;
+  onDragStart?: (item: Contact | Company, sourceTag: string) => void;
 }
 
 const KanbanCard: React.FC<KanbanCardProps> = ({
   item,
   type,
   customColors,
+  columnTag,
   onClick,
+  onDragStart,
 }) => {
   const name =
     type === "contact" ? (item as Contact).name : (item as Company).name;
@@ -439,6 +443,22 @@ const KanbanCard: React.FC<KanbanCardProps> = ({
   return (
     <div
       onClick={onClick}
+      draggable
+      onDragStart={(e) => {
+        e.stopPropagation(); // Prevent column drag when dragging card
+        const itemId =
+          type === "contact" ? (item as Contact).id : (item as Company).name;
+        e.dataTransfer.setData(
+          "application/json",
+          JSON.stringify({
+            type: "card",
+            itemType: type,
+            itemId,
+            sourceTag: columnTag,
+          })
+        );
+        onDragStart?.(item, columnTag);
+      }}
       className="bg-white border rounded-lg p-3 mb-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
     >
       <div className="flex items-start justify-between mb-2">
@@ -463,6 +483,15 @@ interface KanbanColumnProps {
   customColors: Record<string, { bg: string; text: string; border: string }>;
   onContactClick: (contact: Contact) => void;
   onCompanyClick: (company: Company) => void;
+  onDragStart?: (tag: string) => void;
+  onColumnDrop?: (draggedTag: string, targetTag: string) => void;
+  onCardDrop?: (
+    draggedItem: Contact | Company,
+    sourceTag: string,
+    targetTag: string,
+    itemType: "contact" | "company"
+  ) => void;
+  onDragOver?: (e: React.DragEvent) => void;
 }
 
 const KanbanColumn: React.FC<KanbanColumnProps> = ({
@@ -472,6 +501,10 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
   customColors,
   onContactClick,
   onCompanyClick,
+  onDragStart,
+  onColumnDrop,
+  onCardDrop,
+  onDragOver,
 }) => {
   const colors =
     tag !== "No Tags"
@@ -479,7 +512,57 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
       : { bg: "bg-gray-100", text: "text-gray-800", border: "border-gray-200" };
 
   return (
-    <div className="flex flex-col min-w-72 max-w-72 bg-gray-50 rounded-lg p-4">
+    <div
+      className="flex flex-col min-w-72 max-w-72 bg-gray-50 rounded-lg p-4 cursor-move"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", tag);
+        onDragStart?.(tag);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+
+        // Try to parse as card data first
+        try {
+          const cardData = JSON.parse(
+            e.dataTransfer.getData("application/json")
+          );
+          if (cardData.type === "card") {
+            // This is a card being dropped
+            const draggedItem = items.find((item) => {
+              const itemId =
+                cardData.itemType === "contact"
+                  ? (item as Contact).id
+                  : (item as Company).name;
+              return itemId === cardData.itemId;
+            });
+
+            if (draggedItem) {
+              onCardDrop?.(
+                draggedItem,
+                cardData.sourceTag,
+                tag,
+                cardData.itemType
+              );
+            }
+            return;
+          }
+        } catch {
+          // Not card data, try column data
+        }
+
+        // Handle column drop
+        const draggedTag = e.dataTransfer.getData("text/plain");
+        if (draggedTag) {
+          onColumnDrop?.(draggedTag, tag);
+        }
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        onDragOver?.(e);
+      }}
+      onDragEnter={(e) => e.preventDefault()}
+    >
       <div className="flex items-center justify-between mb-4">
         {tag === "No Tags" ? (
           <h3 className="font-medium text-sm text-gray-600">No Tags</h3>
@@ -504,12 +587,16 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
             item={item}
             type={type}
             customColors={customColors}
+            columnTag={tag}
             onClick={() => {
               if (type === "contact") {
                 onContactClick(item as Contact);
               } else {
                 onCompanyClick(item as Company);
               }
+            }}
+            onDragStart={(draggedItem, sourceTag) => {
+              // Card drag start handled by parent
             }}
           />
         ))}
@@ -524,8 +611,16 @@ interface KanbanBoardProps {
   type: "contact" | "company";
   customColors: Record<string, { bg: string; text: string; border: string }>;
   allTags: string[];
+  columnOrder: string[];
   onContactClick: (contact: Contact) => void;
   onCompanyClick: (company: Company) => void;
+  onColumnReorder: (newOrder: string[]) => void;
+  onCardMove: (
+    item: Contact | Company,
+    sourceTag: string,
+    targetTag: string,
+    itemType: "contact" | "company"
+  ) => void;
 }
 
 const KanbanBoard: React.FC<KanbanBoardProps> = ({
@@ -533,8 +628,11 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   type,
   customColors,
   allTags,
+  columnOrder,
   onContactClick,
   onCompanyClick,
+  onColumnReorder,
+  onCardMove,
 }) => {
   // Group items by tags
   const tagGroups: Record<string, (Contact | Company)[]> = {};
@@ -568,12 +666,61 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
     ([tag, items]) => items.length > 0 || tag === "No Tags"
   );
 
-  // Sort tag groups: put "No Tags" at the end, then alphabetically
-  activeTagGroups.sort(([tagA], [tagB]) => {
-    if (tagA === "No Tags") return 1;
-    if (tagB === "No Tags") return -1;
-    return tagA.localeCompare(tagB);
-  });
+  // Apply custom column order if available
+  if (columnOrder.length > 0) {
+    activeTagGroups.sort(([tagA], [tagB]) => {
+      const indexA = columnOrder.indexOf(tagA);
+      const indexB = columnOrder.indexOf(tagB);
+
+      // If both tags are in the custom order, sort by their position
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+
+      // If only one tag is in the custom order, prioritize it
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+
+      // If neither tag is in the custom order, use default sorting
+      if (tagA === "No Tags") return 1;
+      if (tagB === "No Tags") return -1;
+      return tagA.localeCompare(tagB);
+    });
+  } else {
+    // Default sorting: put "No Tags" at the end, then alphabetically
+    activeTagGroups.sort(([tagA], [tagB]) => {
+      if (tagA === "No Tags") return 1;
+      if (tagB === "No Tags") return -1;
+      return tagA.localeCompare(tagB);
+    });
+  }
+
+  const handleColumnDrop = (draggedTag: string, targetTag: string) => {
+    if (draggedTag === targetTag) return;
+
+    const currentTags = activeTagGroups.map(([tag]) => tag);
+    const draggedIndex = currentTags.indexOf(draggedTag);
+    const targetIndex = currentTags.indexOf(targetTag);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    const newOrder = [...currentTags];
+    newOrder.splice(draggedIndex, 1);
+    newOrder.splice(targetIndex, 0, draggedTag);
+
+    onColumnReorder(newOrder);
+  };
+
+  const handleCardDrop = (
+    draggedItem: Contact | Company,
+    sourceTag: string,
+    targetTag: string,
+    itemType: "contact" | "company"
+  ) => {
+    if (sourceTag === targetTag) return;
+
+    onCardMove(draggedItem, sourceTag, targetTag, itemType);
+  };
 
   return (
     <div className="flex gap-4 overflow-x-auto pb-4">
@@ -586,6 +733,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
           customColors={customColors}
           onContactClick={onContactClick}
           onCompanyClick={onCompanyClick}
+          onColumnDrop={handleColumnDrop}
+          onCardDrop={handleCardDrop}
+          onDragOver={(e) => e.preventDefault()}
         />
       ))}
     </div>
@@ -631,6 +781,7 @@ export default function Home() {
     color?: { bg: string; text: string; border: string };
   } | null>(null);
   const [showTagManager, setShowTagManager] = useState(false);
+  const [columnOrder, setColumnOrder] = useState<string[]>([]);
 
   // Function to apply edits to contacts
   const applyEditsToContacts = async (
@@ -1165,6 +1316,151 @@ export default function Home() {
     saveCustomTagColors(newCustomColors);
   };
 
+  const handleCardMove = async (
+    item: Contact | Company,
+    sourceTag: string,
+    targetTag: string,
+    itemType: "contact" | "company"
+  ) => {
+    if (sourceTag === targetTag) return;
+
+    setLastSaveError(null);
+    setIsSaving(true);
+
+    try {
+      if (itemType === "contact") {
+        const contact = item as Contact;
+
+        // Update contact tags
+        let newTags = contact.tags || [];
+
+        if (targetTag === "No Tags") {
+          // Moving to "No Tags" column - remove all tags
+          newTags = [];
+        } else if (sourceTag === "No Tags") {
+          // Moving from "No Tags" - just add the target tag
+          newTags = [targetTag];
+        } else {
+          // Replace source tag with target tag
+          newTags = newTags.map((tag) => (tag === sourceTag ? targetTag : tag));
+
+          // If the contact didn't have the source tag, add the target tag
+          if (!contact.tags?.includes(sourceTag)) {
+            newTags = [...newTags, targetTag];
+          }
+        }
+
+        const updatedContact = { ...contact, tags: newTags };
+
+        // Update local state
+        const updatedContacts = contacts.map((c) =>
+          c.id === contact.id ? updatedContact : c
+        );
+        setContacts(updatedContacts);
+
+        // Save to server
+        const response = await fetch(`/api/contacts/${contact.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: contact.name,
+            email: contact.email,
+            company: contact.company,
+            hidden: contact.hidden,
+            starred: contact.starred,
+            tags: newTags,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to update contact");
+        }
+
+        console.log(`Contact moved from "${sourceTag}" to "${targetTag}"`);
+      } else {
+        // Handle company moves - update all contacts in the company
+        const company = item as Company;
+        const companyContacts = contacts.filter(
+          (c) => c.company === company.name
+        );
+
+        for (const contact of companyContacts) {
+          let newTags = contact.tags || [];
+
+          if (targetTag === "No Tags") {
+            newTags = [];
+          } else if (sourceTag === "No Tags") {
+            newTags = [targetTag];
+          } else {
+            newTags = newTags.map((tag) =>
+              tag === sourceTag ? targetTag : tag
+            );
+            if (!contact.tags?.includes(sourceTag)) {
+              newTags = [...newTags, targetTag];
+            }
+          }
+
+          const response = await fetch(`/api/contacts/${contact.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: contact.name,
+              email: contact.email,
+              company: contact.company,
+              hidden: contact.hidden,
+              starred: contact.starred,
+              tags: newTags,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to update contact");
+          }
+        }
+
+        // Update local state for all company contacts
+        const updatedContacts = contacts.map((contact) => {
+          if (contact.company === company.name) {
+            let newTags = contact.tags || [];
+
+            if (targetTag === "No Tags") {
+              newTags = [];
+            } else if (sourceTag === "No Tags") {
+              newTags = [targetTag];
+            } else {
+              newTags = newTags.map((tag) =>
+                tag === sourceTag ? targetTag : tag
+              );
+              if (!contact.tags?.includes(sourceTag)) {
+                newTags = [...newTags, targetTag];
+              }
+            }
+
+            return { ...contact, tags: newTags };
+          }
+          return contact;
+        });
+        setContacts(updatedContacts);
+
+        console.log(
+          `Company "${company.name}" moved from "${sourceTag}" to "${targetTag}"`
+        );
+      }
+    } catch (error) {
+      console.error("Error moving card:", error);
+      setLastSaveError(
+        error instanceof Error ? error.message : "Failed to move card"
+      );
+
+      // Revert changes on error - reload contacts
+      loadContacts();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Group contacts by company
   const groupContactsByCompany = (contacts: Contact[]): Company[] => {
     const companiesMap = new Map<string, Company>();
@@ -1417,6 +1713,20 @@ export default function Home() {
   const saveViewType = (newViewType: ViewType) => {
     setViewType(newViewType);
     localStorage.setItem("rolodex-view-type", newViewType);
+  };
+
+  // Load column order from localStorage
+  useEffect(() => {
+    const savedColumnOrder = localStorage.getItem("rolodex-column-order");
+    if (savedColumnOrder) {
+      setColumnOrder(JSON.parse(savedColumnOrder));
+    }
+  }, []);
+
+  // Save column order to localStorage
+  const saveColumnOrder = (newOrder: string[]) => {
+    setColumnOrder(newOrder);
+    localStorage.setItem("rolodex-column-order", JSON.stringify(newOrder));
   };
 
   // Auto-sync functionality moved to settings page
@@ -1789,55 +2099,87 @@ export default function Home() {
       )}
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-6">
-            <h1
-              className={`text-2xl font-medium cursor-pointer transition-colors ${
-                currentView === "contacts"
-                  ? "text-foreground"
-                  : "text-gray-400 hover:text-gray-600"
-              }`}
-              onClick={() => setCurrentView("contacts")}
-            >
-              {filteredContacts.length} Contacts
-            </h1>
-            <h1
-              className={`text-2xl font-medium cursor-pointer transition-colors ${
-                currentView === "companies"
-                  ? "text-foreground"
-                  : "text-gray-400 hover:text-gray-600"
-              }`}
-              onClick={() => setCurrentView("companies")}
-            >
-              {filteredCompanies.length} Companies
-            </h1>
-
+          <div className="flex items-center gap-4">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="h-auto p-0 text-2xl font-medium hover:bg-transparent"
+                >
+                  {currentView === "contacts"
+                    ? `${filteredContacts.length} Contacts`
+                    : `${filteredCompanies.length} Companies`}
+                  <svg
+                    className="ml-1 h-5 w-5 text-muted-foreground"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => setCurrentView("contacts")}
+                  className={`cursor-pointer ${
+                    currentView === "contacts" ? "bg-muted" : ""
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span>{filteredContacts.length} Contacts</span>
+                    {currentView === "contacts" && (
+                      <Check className="h-4 w-4" />
+                    )}
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setCurrentView("companies")}
+                  className={`cursor-pointer ${
+                    currentView === "companies" ? "bg-muted" : ""
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span>{filteredCompanies.length} Companies</span>
+                    {currentView === "companies" && (
+                      <Check className="h-4 w-4" />
+                    )}
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <div className="flex items-center gap-2">
             {/* View Type Toggle */}
-            <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
+            <div className="flex items-center gap-0.5 bg-muted p-0.5 rounded-lg h-8">
               <button
                 onClick={() => saveViewType("table")}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-sm transition-colors ${
+                className={`px-2 py-1 transition-colors h-7 flex items-center ${
                   viewType === "table"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-background text-foreground shadow-sm rounded-md"
+                    : "text-muted-foreground hover:text-foreground rounded"
                 }`}
+                title="Table view"
               >
                 <TableProperties className="h-3 w-3" />
-                Table
               </button>
               <button
                 onClick={() => saveViewType("kanban")}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-sm transition-colors ${
+                className={`px-2 py-1 transition-colors h-7 flex items-center ${
                   viewType === "kanban"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-background text-foreground shadow-sm rounded-md"
+                    : "text-muted-foreground hover:text-foreground rounded"
                 }`}
+                title="Kanban view"
               >
                 <LayoutGrid className="h-3 w-3" />
-                Kanban
               </button>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
             <div className="relative max-w-sm">
               <Input
                 placeholder={
@@ -1886,20 +2228,9 @@ export default function Home() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuItem
-                  onSelect={(e) => e.preventDefault()}
-                  onClick={() => setShowStarred(!showStarred)}
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  <Star className="h-4 w-4" />
-                  <span>Starred only</span>
-                  {showStarred && <Check className="h-4 w-4 ml-auto" />}
-                </DropdownMenuItem>
-
                 {/* Tag filter section */}
                 {allTags.length > 0 && (
                   <>
-                    <DropdownMenuSeparator />
                     <DropdownMenuLabel className="flex items-center gap-2">
                       <Tag className="h-4 w-4" />
                       Filter by tags
@@ -1912,7 +2243,7 @@ export default function Home() {
                         </button>
                       )}
                     </DropdownMenuLabel>
-                    <div className="px-2 py-1 max-h-32 overflow-y-auto">
+                    <div className="py-1 max-h-32 overflow-y-auto">
                       <div className="space-y-1">
                         {allTags.slice(0, 8).map((tag) => {
                           const colors = getTagColor(tag, customTagColors);
@@ -1949,7 +2280,7 @@ export default function Home() {
                                   className="hover:bg-muted/50 p-1 rounded opacity-60 hover:opacity-100"
                                   title="Edit tag"
                                 >
-                                  <Pencil className="h-2.5 w-2.5" />
+                                  <Pencil className="h-3 w-3" />
                                 </button>
                                 {selectedTags.includes(tag) && (
                                   <Check className="h-3 w-3" />
@@ -1990,6 +2321,15 @@ export default function Home() {
                   />
                   <span>Calendar</span>
                   {showCalendar && <Check className="h-4 w-4 ml-auto" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => e.preventDefault()}
+                  onClick={() => setShowStarred(!showStarred)}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <Star className="h-4 w-4" />
+                  <span>Starred</span>
+                  {showStarred && <Check className="h-4 w-4 ml-auto" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={(e) => e.preventDefault()}
@@ -2052,8 +2392,11 @@ export default function Home() {
                   type="contact"
                   customColors={customTagColors}
                   allTags={allTags}
+                  columnOrder={columnOrder}
                   onContactClick={handleContactClick}
                   onCompanyClick={handleCompanyClick}
+                  onColumnReorder={saveColumnOrder}
+                  onCardMove={handleCardMove}
                 />
               ) : (
                 <KanbanBoard
@@ -2061,8 +2404,11 @@ export default function Home() {
                   type="company"
                   customColors={customTagColors}
                   allTags={allTags}
+                  columnOrder={columnOrder}
                   onContactClick={handleContactClick}
                   onCompanyClick={handleCompanyClick}
+                  onColumnReorder={saveColumnOrder}
+                  onCardMove={handleCardMove}
                 />
               )
             ) : currentView === "contacts" ? (
