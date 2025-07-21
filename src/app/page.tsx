@@ -77,7 +77,7 @@ interface ContactEdit {
   tags?: string[];
 }
 
-type SortField = "name" | "email" | "company" | "lastContact";
+type SortField = "name" | "email" | "company" | "lastContact" | "tags";
 type SortDirection = "asc" | "desc";
 type View = "contacts" | "companies";
 
@@ -1077,6 +1077,19 @@ export default function Home() {
             bVal = new Date(b.lastContact).getTime();
           }
           break;
+        case "tags":
+          // Sort by first tag alphabetically, empty tags go to end
+          const aFirstTag =
+            a.tags && a.tags.length > 0
+              ? a.tags.sort()[0].toLowerCase()
+              : "zzz_no_tags";
+          const bFirstTag =
+            b.tags && b.tags.length > 0
+              ? b.tags.sort()[0].toLowerCase()
+              : "zzz_no_tags";
+          aVal = aFirstTag;
+          bVal = bFirstTag;
+          break;
         default:
           aVal = a.name.toLowerCase();
           bVal = b.name.toLowerCase();
@@ -1146,6 +1159,19 @@ export default function Home() {
           } else {
             bVal = new Date(b.lastContact).getTime();
           }
+          break;
+        case "tags":
+          // Sort by first tag alphabetically, empty tags go to end
+          const aFirstTag =
+            a.tags && a.tags.length > 0
+              ? a.tags.sort()[0].toLowerCase()
+              : "zzz_no_tags";
+          const bFirstTag =
+            b.tags && b.tags.length > 0
+              ? b.tags.sort()[0].toLowerCase()
+              : "zzz_no_tags";
+          aVal = aFirstTag;
+          bVal = bFirstTag;
           break;
         default:
           aVal = a.name.toLowerCase();
@@ -1802,7 +1828,12 @@ export default function Home() {
                     >
                       Company {getSortIcon("company")}
                     </TableHead>
-                    <TableHead className="w-[20%]">Tags</TableHead>
+                    <TableHead
+                      onClick={() => handleSort("tags")}
+                      className="cursor-pointer hover:bg-muted/50 w-[20%]"
+                    >
+                      Tags {getSortIcon("tags")}
+                    </TableHead>
                     <TableHead className="w-12 text-center">Source</TableHead>
                     <TableHead
                       onClick={() => handleSort("lastContact")}
@@ -1921,7 +1952,12 @@ export default function Home() {
                     >
                       Contacts {getSortIcon("company")}
                     </TableHead>
-                    <TableHead className="w-[25%]">Tags</TableHead>
+                    <TableHead
+                      onClick={() => handleSort("tags")}
+                      className="cursor-pointer hover:bg-muted/50 w-[25%]"
+                    >
+                      Tags {getSortIcon("tags")}
+                    </TableHead>
                     <TableHead
                       onClick={() => handleSort("lastContact")}
                       className="cursor-pointer hover:bg-muted/50 whitespace-nowrap w-[25%] text-right"
