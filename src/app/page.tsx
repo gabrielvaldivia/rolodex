@@ -2562,7 +2562,7 @@ export default function Home() {
                         onClick={() => handleSort("company")}
                         className="cursor-pointer hover:bg-muted/50 min-w-24"
                       >
-                        Contacts {getSortIcon("company")}
+                        Contact {getSortIcon("company")}
                       </TableHead>
                       <TableHead
                         onClick={() => handleSort("tags")}
@@ -2619,8 +2619,37 @@ export default function Home() {
                           className="text-muted-foreground truncate pr-4"
                           onClick={() => handleCompanyClick(company)}
                         >
-                          {company.contactCount} contact
-                          {company.contactCount !== 1 ? "s" : ""}
+                          {(() => {
+                            // Sort contacts by most recent contact date
+                            const sortedContacts = [...company.contacts].sort(
+                              (a, b) => {
+                                if (
+                                  a.lastContact === "Unknown" &&
+                                  b.lastContact === "Unknown"
+                                )
+                                  return 0;
+                                if (a.lastContact === "Unknown") return 1;
+                                if (b.lastContact === "Unknown") return -1;
+                                return (
+                                  new Date(b.lastContact).getTime() -
+                                  new Date(a.lastContact).getTime()
+                                );
+                              }
+                            );
+
+                            const mostRecentContact = sortedContacts[0];
+                            const remainingCount = company.contactCount - 1;
+
+                            if (company.contactCount === 1) {
+                              return mostRecentContact.name;
+                            } else {
+                              return `${
+                                mostRecentContact.name
+                              } + ${remainingCount} other${
+                                remainingCount === 1 ? "" : "s"
+                              }`;
+                            }
+                          })()}
                         </TableCell>
                         <TableCell
                           className="pr-4"
