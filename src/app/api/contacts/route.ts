@@ -19,10 +19,10 @@ async function fetchGmailContacts(auth: InstanceType<typeof google.auth.OAuth2>)
   const gmailContacts = new Map<string, Contact>()
 
   try {
-    // Get recent emails for faster initial sync
+    // Get recent emails for comprehensive contact discovery
     const emailResponse = await gmail.users.messages.list({
       userId: 'me',
-      maxResults: 25, // Reduced for faster sync - focus on recent contacts
+      maxResults: 2500, // Increased to match Calendar events for better coverage
       q: 'in:sent OR in:inbox', // Get both sent and received emails
     })
 
