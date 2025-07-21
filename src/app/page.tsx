@@ -451,35 +451,6 @@ const KanbanCard: React.FC<KanbanCardProps> = ({
       <div className="text-xs text-muted-foreground mb-2">
         {formatRelativeDate(lastContact)}
       </div>
-
-      {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {tags.slice(0, 2).map((tag) => {
-            const colors = getTagColor(tag, customColors);
-            return (
-              <span
-                key={tag}
-                className={`inline-flex items-center px-1.5 py-0.5 text-xs rounded ${colors.bg} ${colors.text}`}
-                title={tag}
-              >
-                <span className="max-w-12 truncate">{tag}</span>
-              </span>
-            );
-          })}
-          {tags.length > 2 && (
-            <span className="text-xs text-muted-foreground">
-              +{tags.length - 2}
-            </span>
-          )}
-        </div>
-      )}
-
-      {type === "company" && (
-        <div className="text-xs text-muted-foreground mt-1">
-          {(item as Company).contactCount} contact
-          {(item as Company).contactCount !== 1 ? "s" : ""}
-        </div>
-      )}
     </div>
   );
 };
@@ -1423,12 +1394,29 @@ export default function Home() {
     }
   }, []);
 
+  // Load view type from localStorage
+  useEffect(() => {
+    const savedViewType = localStorage.getItem("rolodex-view-type");
+    if (
+      savedViewType &&
+      (savedViewType === "table" || savedViewType === "kanban")
+    ) {
+      setViewType(savedViewType as ViewType);
+    }
+  }, []);
+
   // Save custom tag colors to localStorage
   const saveCustomTagColors = (
     colors: Record<string, { bg: string; text: string; border: string }>
   ) => {
     setCustomTagColors(colors);
     localStorage.setItem("rolodex-custom-tag-colors", JSON.stringify(colors));
+  };
+
+  // Save view type to localStorage
+  const saveViewType = (newViewType: ViewType) => {
+    setViewType(newViewType);
+    localStorage.setItem("rolodex-view-type", newViewType);
   };
 
   // Auto-sync functionality moved to settings page
@@ -1826,7 +1814,7 @@ export default function Home() {
             {/* View Type Toggle */}
             <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
               <button
-                onClick={() => setViewType("table")}
+                onClick={() => saveViewType("table")}
                 className={`flex items-center gap-1 px-2 py-1 rounded text-sm transition-colors ${
                   viewType === "table"
                     ? "bg-background text-foreground shadow-sm"
@@ -1837,7 +1825,7 @@ export default function Home() {
                 Table
               </button>
               <button
-                onClick={() => setViewType("kanban")}
+                onClick={() => saveViewType("kanban")}
                 className={`flex items-center gap-1 px-2 py-1 rounded text-sm transition-colors ${
                   viewType === "kanban"
                     ? "bg-background text-foreground shadow-sm"
