@@ -1379,11 +1379,17 @@ export default function Home() {
                         handleContactClick(contact);
                       }}
                     >
-                      <div className="flex-1">
-                        <div className="font-medium text-sm">
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className="font-medium text-sm truncate"
+                          title={contact.name}
+                        >
                           {contact.name}
                         </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div
+                          className="text-xs text-muted-foreground truncate"
+                          title={contact.email}
+                        >
                           {contact.email}
                         </div>
                       </div>
@@ -1434,8 +1440,9 @@ export default function Home() {
                     />
                   ) : (
                     <h1
-                      className="text-lg font-semibold cursor-pointer px-0 py-1 rounded"
+                      className="text-lg font-semibold cursor-pointer px-0 py-1 rounded truncate"
                       onClick={() => setEditingName(true)}
+                      title={editedContact.name || "Contact Name"}
                     >
                       {editedContact.name || "Contact Name"}
                     </h1>
