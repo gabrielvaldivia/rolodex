@@ -22,12 +22,22 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Settings,
   RefreshCw,
   ExternalLink,
   Eye,
   EyeOff,
   X,
+  Filter,
+  Check,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -198,6 +208,8 @@ export default function Home() {
   const [originalCompanyName, setOriginalCompanyName] = useState("");
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [showGmail, setShowGmail] = useState(true);
+  const [showCalendar, setShowCalendar] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaveError, setLastSaveError] = useState<string | null>(null);
   const [backgroundSyncing, setBackgroundSyncing] = useState(false);
@@ -900,7 +912,11 @@ export default function Home() {
 
     const isVisible = showHidden || !contact.hidden;
 
-    return matchesSearch && isVisible;
+    const matchesSource =
+      (contact.source === "Gmail" && showGmail) ||
+      (contact.source === "Calendar" && showCalendar);
+
+    return matchesSearch && isVisible && matchesSource;
   });
 
   const filteredCompanies = groupContactsByCompany(filteredContacts).filter(
@@ -995,18 +1011,61 @@ export default function Home() {
                 </Button>
               )}
             </div>
-            <Button
-              onClick={() => setShowHidden(!showHidden)}
-              variant={showHidden ? "default" : "outline"}
-              size="sm"
-              title={showHidden ? "Hide hidden rows" : "Show hidden rows"}
-            >
-              {showHidden ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`relative ${
+                    !showGmail || !showCalendar || showHidden
+                      ? "border-blue-500 bg-blue-50 hover:bg-blue-100"
+                      : ""
+                  }`}
+                >
+                  <Filter className="h-4 w-4" />
+                  {(!showGmail || !showCalendar || showHidden) && (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 bg-blue-500 rounded-full"></span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onSelect={(e) => e.preventDefault()}
+                  onClick={() => setShowGmail(!showGmail)}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <img src="/icons/gmail.png" alt="Gmail" className="h-4 w-4" />
+                  <span>Gmail</span>
+                  {showGmail && <Check className="h-4 w-4 ml-auto" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => e.preventDefault()}
+                  onClick={() => setShowCalendar(!showCalendar)}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <img
+                    src="/icons/calendar.png"
+                    alt="Calendar"
+                    className="h-4 w-4"
+                  />
+                  <span>Calendar</span>
+                  {showCalendar && <Check className="h-4 w-4 ml-auto" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => e.preventDefault()}
+                  onClick={() => setShowHidden(!showHidden)}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  {showHidden ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                  <span>Hidden</span>
+                  {showHidden && <Check className="h-4 w-4 ml-auto" />}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               onClick={() => fetchContacts()}
               variant="outline"
