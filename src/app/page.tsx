@@ -2132,7 +2132,7 @@ export default function Home() {
                   }`}
                 >
                   <div className="flex items-center justify-between w-full">
-                    <span>{filteredContacts.length} Contacts</span>
+                    <span>Contacts</span>
                     {currentView === "contacts" && (
                       <Check className="h-4 w-4" />
                     )}
@@ -2145,7 +2145,7 @@ export default function Home() {
                   }`}
                 >
                   <div className="flex items-center justify-between w-full">
-                    <span>{filteredCompanies.length} Companies</span>
+                    <span>Companies</span>
                     {currentView === "companies" && (
                       <Check className="h-4 w-4" />
                     )}
@@ -2649,22 +2649,6 @@ export default function Home() {
               <SheetHeader className="space-y-3">
                 <SheetTitle className="sr-only">Company Details</SheetTitle>
 
-                {/* Save Status Indicator */}
-                {(isSaving || lastSaveError) && (
-                  <div className="flex items-center gap-2 text-sm">
-                    {isSaving ? (
-                      <div className="flex items-center gap-2 text-blue-600">
-                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                        <span>Saving...</span>
-                      </div>
-                    ) : lastSaveError ? (
-                      <div className="flex items-center gap-2 text-red-600">
-                        <span>⚠️ {lastSaveError}</span>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-
                 <div className="space-y-1">
                   {editingCompanyName ? (
                     <Input
@@ -2759,6 +2743,45 @@ export default function Home() {
 
               <div className="mt-6 space-y-4">
                 <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <Button
+                      variant={selectedCompany.starred ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        updateCompanyStarred(
+                          selectedCompany.name,
+                          !selectedCompany.starred
+                        );
+                      }}
+                      className="flex-1 flex items-center gap-2"
+                    >
+                      <Star
+                        className={`h-4 w-4 ${
+                          selectedCompany.starred ? "fill-current" : ""
+                        }`}
+                      />
+                      {selectedCompany.starred ? "Starred" : "Star"}
+                    </Button>
+                    <Button
+                      variant={selectedCompany.hidden ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        updateCompanyHidden(
+                          selectedCompany.name,
+                          !selectedCompany.hidden
+                        );
+                      }}
+                      className="flex-1 flex items-center gap-2"
+                    >
+                      {selectedCompany.hidden ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                      {selectedCompany.hidden ? "Hidden" : "Hide"}
+                    </Button>
+                  </div>
+
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-muted-foreground">
                       Tags
@@ -2779,33 +2802,6 @@ export default function Home() {
                       suggestions={allTags}
                       placeholder="Add tags to all contacts in this company..."
                       customColors={customTagColors}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label className="text-sm font-medium text-muted-foreground">
-                        Star Company
-                      </Label>
-                    </div>
-                    <Switch
-                      checked={selectedCompany.starred || false}
-                      onCheckedChange={(checked) => {
-                        updateCompanyStarred(selectedCompany.name, checked);
-                      }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label className="text-sm font-medium text-muted-foreground">
-                        Hide Company
-                      </Label>
-                    </div>
-                    <Switch
-                      checked={selectedCompany.hidden || false}
-                      onCheckedChange={(checked) => {
-                        updateCompanyHidden(selectedCompany.name, checked);
-                      }}
                     />
                   </div>
                 </div>
@@ -2845,6 +2841,22 @@ export default function Home() {
                   ))}
                 </div>
               </div>
+
+              {/* Save Status Indicator - Bottom of Sheet */}
+              {(isSaving || lastSaveError) && (
+                <div className="flex items-center justify-center gap-2 text-sm p-4 border-t bg-muted/20">
+                  {isSaving ? (
+                    <div className="flex items-center gap-2 text-blue-600">
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                      <span>Saving...</span>
+                    </div>
+                  ) : lastSaveError ? (
+                    <div className="flex items-center gap-2 text-red-600">
+                      <span>⚠️ {lastSaveError}</span>
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </>
           )}
         </SheetContent>
@@ -2955,6 +2967,49 @@ export default function Home() {
                   />
                 </div>
 
+                <div className="flex gap-2">
+                  <Button
+                    variant={editedContact.starred ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      const updatedContact = {
+                        ...editedContact,
+                        starred: !editedContact.starred,
+                      };
+                      setEditedContact(updatedContact);
+                      saveContactDebounced(updatedContact);
+                    }}
+                    className="flex-1 flex items-center gap-2"
+                  >
+                    <Star
+                      className={`h-4 w-4 ${
+                        editedContact.starred ? "fill-current" : ""
+                      }`}
+                    />
+                    {editedContact.starred ? "Starred" : "Star"}
+                  </Button>
+                  <Button
+                    variant={editedContact.hidden ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      const updatedContact = {
+                        ...editedContact,
+                        hidden: !editedContact.hidden,
+                      };
+                      setEditedContact(updatedContact);
+                      saveContactDebounced(updatedContact);
+                    }}
+                    className="flex-1 flex items-center gap-2"
+                  >
+                    {editedContact.hidden ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                    {editedContact.hidden ? "Hidden" : "Hide"}
+                  </Button>
+                </div>
+
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Tags</Label>
                   <TagInput
@@ -2971,45 +3026,6 @@ export default function Home() {
                     placeholder="Add tags..."
                     customColors={customTagColors}
                   />
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label className="text-sm font-medium">
-                        Star Contact
-                      </Label>
-                    </div>
-                    <Switch
-                      checked={editedContact.starred || false}
-                      onCheckedChange={(checked) => {
-                        const updatedContact = {
-                          ...editedContact,
-                          starred: checked,
-                        };
-                        setEditedContact(updatedContact);
-                        saveContactDebounced(updatedContact);
-                      }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label className="text-sm font-medium">
-                        Hide Contact
-                      </Label>
-                    </div>
-                    <Switch
-                      checked={editedContact.hidden || false}
-                      onCheckedChange={(checked) => {
-                        const updatedContact = {
-                          ...editedContact,
-                          hidden: checked,
-                        };
-                        setEditedContact(updatedContact);
-                        saveContactDebounced(updatedContact);
-                      }}
-                    />
-                  </div>
                 </div>
 
                 <div className="space-y-2">
