@@ -38,6 +38,12 @@ import {
   X,
   SlidersHorizontal,
   Check,
+  Star,
+  Tag,
+  Plus,
+  Edit,
+  Palette,
+  Pencil,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -56,6 +62,8 @@ interface Contact {
   lastEmailPreview?: string;
   lastMeetingName?: string;
   hidden?: boolean;
+  starred?: boolean;
+  tags?: string[];
 }
 
 interface ContactEdit {
@@ -65,6 +73,8 @@ interface ContactEdit {
   company: string;
   updatedAt: string;
   hidden?: boolean;
+  starred?: boolean;
+  tags?: string[];
 }
 
 type SortField = "name" | "email" | "company" | "lastContact";
@@ -78,6 +88,8 @@ interface Company {
   contacts: Contact[];
   hidden?: boolean;
   website?: string;
+  starred?: boolean;
+  tags?: string[];
 }
 
 // Add relative date formatting function
@@ -187,6 +199,221 @@ const generateCompanyWebsite = (companyName: string): string => {
   return `https://${cleanName}.com`;
 };
 
+// Tag color system
+const TAG_COLORS = [
+  { bg: "bg-red-100", text: "text-red-800", border: "border-red-200" },
+  { bg: "bg-orange-100", text: "text-orange-800", border: "border-orange-200" },
+  { bg: "bg-amber-100", text: "text-amber-800", border: "border-amber-200" },
+  { bg: "bg-yellow-100", text: "text-yellow-800", border: "border-yellow-200" },
+  { bg: "bg-lime-100", text: "text-lime-800", border: "border-lime-200" },
+  { bg: "bg-green-100", text: "text-green-800", border: "border-green-200" },
+  {
+    bg: "bg-emerald-100",
+    text: "text-emerald-800",
+    border: "border-emerald-200",
+  },
+  { bg: "bg-teal-100", text: "text-teal-800", border: "border-teal-200" },
+  { bg: "bg-cyan-100", text: "text-cyan-800", border: "border-cyan-200" },
+  { bg: "bg-sky-100", text: "text-sky-800", border: "border-sky-200" },
+  { bg: "bg-blue-100", text: "text-blue-800", border: "border-blue-200" },
+  { bg: "bg-indigo-100", text: "text-indigo-800", border: "border-indigo-200" },
+  { bg: "bg-violet-100", text: "text-violet-800", border: "border-violet-200" },
+  { bg: "bg-purple-100", text: "text-purple-800", border: "border-purple-200" },
+  {
+    bg: "bg-fuchsia-100",
+    text: "text-fuchsia-800",
+    border: "border-fuchsia-200",
+  },
+  { bg: "bg-pink-100", text: "text-pink-800", border: "border-pink-200" },
+  { bg: "bg-rose-100", text: "text-rose-800", border: "border-rose-200" },
+  { bg: "bg-gray-100", text: "text-gray-800", border: "border-gray-200" },
+  { bg: "bg-slate-100", text: "text-slate-800", border: "border-slate-200" },
+  { bg: "bg-zinc-100", text: "text-zinc-800", border: "border-zinc-200" },
+];
+
+// Generate consistent color for a tag based on its name
+const getTagColor = (
+  tagName: string,
+  customColors: Record<
+    string,
+    { bg: string; text: string; border: string }
+  > = {}
+) => {
+  // Check for custom color first
+  if (customColors[tagName]) {
+    return customColors[tagName];
+  }
+
+  // Simple hash function for consistent color assignment
+  let hash = 0;
+  for (let i = 0; i < tagName.length; i++) {
+    const char = tagName.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+
+  const colorIndex = Math.abs(hash) % TAG_COLORS.length;
+  return TAG_COLORS[colorIndex];
+};
+
+// Tag Input Component
+interface TagInputProps {
+  tags: string[];
+  onTagsChange: (tags: string[]) => void;
+  suggestions?: string[];
+  placeholder?: string;
+  disabled?: boolean;
+  customColors?: Record<string, { bg: string; text: string; border: string }>;
+}
+
+const TagInput: React.FC<TagInputProps> = ({
+  tags,
+  onTagsChange,
+  suggestions = [],
+  placeholder = "Add tag...",
+  disabled = false,
+  customColors = {},
+}) => {
+  const [inputValue, setInputValue] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const filteredSuggestions = suggestions.filter(
+    (suggestion) =>
+      suggestion.toLowerCase().includes(inputValue.toLowerCase()) &&
+      !tags.includes(suggestion)
+  );
+
+  const addTag = (tag: string) => {
+    const trimmedTag = tag.trim();
+    if (trimmedTag && !tags.includes(trimmedTag)) {
+      onTagsChange([...tags, trimmedTag]);
+    }
+    setInputValue("");
+    setShowSuggestions(false);
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    onTagsChange(tags.filter((tag) => tag !== tagToRemove));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (inputValue.trim()) {
+        addTag(inputValue);
+      }
+    } else if (e.key === "Backspace" && !inputValue && tags.length > 0) {
+      removeTag(tags[tags.length - 1]);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <div className="flex flex-wrap gap-1 min-h-[32px] p-2 border rounded-md bg-background">
+        {tags.map((tag) => {
+          const colors = getTagColor(tag, customColors);
+          return (
+            <span
+              key={tag}
+              className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md ${colors.bg} ${colors.text}`}
+            >
+              {tag}
+              {!disabled && (
+                <button
+                  onClick={() => removeTag(tag)}
+                  className="hover:opacity-70 ml-1"
+                  type="button"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </span>
+          );
+        })}
+        {!disabled && (
+          <Input
+            value={inputValue}
+            onChange={(e) => {
+              setInputValue(e.target.value);
+              setShowSuggestions(e.target.value.length > 0);
+            }}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setShowSuggestions(inputValue.length > 0)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            placeholder={tags.length === 0 ? placeholder : ""}
+            className="border-0 shadow-none focus:ring-0 px-0 py-0 h-6 text-sm min-w-[120px] flex-1"
+          />
+        )}
+      </div>
+
+      {/* Suggestions dropdown */}
+      {showSuggestions && filteredSuggestions.length > 0 && (
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border rounded-md shadow-lg max-h-40 overflow-y-auto">
+          {filteredSuggestions.slice(0, 5).map((suggestion) => {
+            const colors = getTagColor(suggestion, customColors);
+            return (
+              <button
+                key={suggestion}
+                onClick={() => addTag(suggestion)}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
+                type="button"
+              >
+                <span
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${colors.bg} ${colors.text}`}
+                >
+                  {suggestion}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Tag Display Component (read-only)
+interface TagDisplayProps {
+  tags: string[];
+  maxDisplay?: number;
+  size?: "sm" | "md";
+  customColors?: Record<string, { bg: string; text: string; border: string }>;
+}
+
+const TagDisplay: React.FC<TagDisplayProps> = ({
+  tags,
+  maxDisplay = 3,
+  size = "sm",
+  customColors = {},
+}) => {
+  if (!tags || tags.length === 0) return null;
+
+  const displayTags = tags.slice(0, maxDisplay);
+  const remainingCount = tags.length - maxDisplay;
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {displayTags.map((tag) => {
+        const colors = getTagColor(tag, customColors);
+        return (
+          <span
+            key={tag}
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${
+              colors.bg
+            } ${colors.text} ${size === "sm" ? "text-xs" : "text-sm"}`}
+            title={tag}
+          >
+            <span className="max-w-16 truncate">{tag}</span>
+          </span>
+        );
+      })}
+      {remainingCount > 0 && (
+        <span className="text-xs text-muted-foreground">+{remainingCount}</span>
+      )}
+    </div>
+  );
+};
+
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -208,11 +435,23 @@ export default function Home() {
   const [originalCompanyName, setOriginalCompanyName] = useState("");
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [showStarred, setShowStarred] = useState(false);
   const [showGmail, setShowGmail] = useState(true);
   const [showCalendar, setShowCalendar] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaveError, setLastSaveError] = useState<string | null>(null);
   const [backgroundSyncing, setBackgroundSyncing] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [customTagColors, setCustomTagColors] = useState<
+    Record<string, { bg: string; text: string; border: string }>
+  >({});
+  const [editingTag, setEditingTag] = useState<{
+    oldName: string;
+    newName: string;
+    color?: { bg: string; text: string; border: string };
+  } | null>(null);
+  const [showTagManager, setShowTagManager] = useState(false);
 
   // Function to apply edits to contacts
   const applyEditsToContacts = async (
@@ -236,6 +475,8 @@ export default function Home() {
             email: edit.email || contact.email,
             company: edit.company || contact.company,
             hidden: edit.hidden || contact.hidden,
+            starred: edit.starred || contact.starred,
+            tags: edit.tags || contact.tags,
           };
         }
         return contact;
@@ -303,6 +544,8 @@ export default function Home() {
               email: contact.email,
               company: newName.trim(),
               hidden: contact.hidden,
+              starred: contact.starred,
+              tags: contact.tags || [],
             }),
           })
         )
@@ -436,6 +679,8 @@ export default function Home() {
               email: contact.email,
               company: contact.company,
               hidden: hidden,
+              starred: contact.starred,
+              tags: contact.tags || [],
             }),
           })
         )
@@ -465,6 +710,276 @@ export default function Home() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const updateContactStarred = async (contactId: string, starred: boolean) => {
+    setLastSaveError(null);
+    setIsSaving(true);
+
+    try {
+      // Update the contact in the contacts array
+      const updatedContacts = contacts.map((contact) =>
+        contact.id === contactId ? { ...contact, starred: starred } : contact
+      );
+      setContacts(updatedContacts);
+
+      // Update the selected contact if it's the same
+      if (selectedContact && selectedContact.id === contactId) {
+        setSelectedContact({ ...selectedContact, starred: starred });
+      }
+      if (editedContact && editedContact.id === contactId) {
+        setEditedContact({ ...editedContact, starred: starred });
+      }
+
+      // Save changes to the server
+      const contact = contacts.find((c) => c.id === contactId);
+      if (!contact) return;
+
+      const response = await fetch(`/api/contacts/${contactId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: contact.name,
+          email: contact.email,
+          company: contact.company,
+          hidden: contact.hidden,
+          starred: starred,
+          tags: contact.tags || [],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to star contact");
+      }
+
+      console.log(`Contact ${starred ? "starred" : "unstarred"} successfully`);
+    } catch (error) {
+      console.error("Error updating contact starred state:", error);
+      setLastSaveError(
+        error instanceof Error ? error.message : "Failed to update contact star"
+      );
+
+      // Revert changes on error
+      setContacts(contacts);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updateCompanyStarred = async (
+    companyName: string,
+    starred: boolean
+  ) => {
+    setLastSaveError(null);
+    setIsSaving(true);
+
+    try {
+      // Update all contacts that belong to this company
+      const updatedContacts = contacts.map((contact) =>
+        contact.company === companyName
+          ? { ...contact, starred: starred }
+          : contact
+      );
+
+      setContacts(updatedContacts);
+
+      // Update the selected company
+      if (selectedCompany && selectedCompany.name === companyName) {
+        setSelectedCompany({
+          ...selectedCompany,
+          starred: starred,
+          contacts: selectedCompany.contacts.map((contact) => ({
+            ...contact,
+            starred: starred,
+          })),
+        });
+      }
+
+      // Save changes to the server for each contact
+      const contactsToUpdate = contacts.filter(
+        (contact) => contact.company === companyName
+      );
+
+      const responses = await Promise.all(
+        contactsToUpdate.map((contact) =>
+          fetch(`/api/contacts/${contact.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: contact.name,
+              email: contact.email,
+              company: contact.company,
+              hidden: contact.hidden,
+              starred: starred,
+              tags: contact.tags || [],
+            }),
+          })
+        )
+      );
+
+      // Check if all requests were successful
+      const failedRequests = responses.filter((response) => !response.ok);
+      if (failedRequests.length > 0) {
+        throw new Error(`Failed to update ${failedRequests.length} contact(s)`);
+      }
+
+      console.log(
+        `Company ${starred ? "starred" : "unstarred"} successfully for ${
+          contactsToUpdate.length
+        } contacts`
+      );
+    } catch (error) {
+      console.error("Error updating company starred state:", error);
+      setLastSaveError(
+        error instanceof Error ? error.message : "Failed to update company star"
+      );
+
+      // Revert changes on error
+      setContacts(contacts);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updateCompanyTags = async (companyName: string, tags: string[]) => {
+    setLastSaveError(null);
+    setIsSaving(true);
+
+    try {
+      // Update all contacts that belong to this company
+      const updatedContacts = contacts.map((contact) =>
+        contact.company === companyName ? { ...contact, tags: tags } : contact
+      );
+
+      setContacts(updatedContacts);
+
+      // Save changes to the server for each contact
+      const contactsToUpdate = contacts.filter(
+        (contact) => contact.company === companyName
+      );
+
+      const responses = await Promise.all(
+        contactsToUpdate.map((contact) =>
+          fetch(`/api/contacts/${contact.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: contact.name,
+              email: contact.email,
+              company: contact.company,
+              hidden: contact.hidden,
+              starred: contact.starred,
+              tags: tags,
+            }),
+          })
+        )
+      );
+
+      // Check if all requests were successful
+      const failedRequests = responses.filter((response) => !response.ok);
+      if (failedRequests.length > 0) {
+        throw new Error(`Failed to update ${failedRequests.length} contact(s)`);
+      }
+
+      console.log(
+        `Company tags updated successfully for ${contactsToUpdate.length} contacts`
+      );
+    } catch (error) {
+      console.error("Error updating company tags:", error);
+      setLastSaveError(
+        error instanceof Error ? error.message : "Failed to update company tags"
+      );
+
+      // Revert changes on error
+      setContacts(contacts);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const renameTag = async (oldName: string, newName: string) => {
+    if (oldName === newName || !newName.trim()) return;
+
+    setLastSaveError(null);
+    setIsSaving(true);
+
+    try {
+      // Update all contacts that have this tag
+      const updatedContacts = contacts.map((contact) => {
+        if (contact.tags && contact.tags.includes(oldName)) {
+          const newTags = contact.tags.map((tag) =>
+            tag === oldName ? newName.trim() : tag
+          );
+          return { ...contact, tags: newTags };
+        }
+        return contact;
+      });
+
+      setContacts(updatedContacts);
+
+      // Update custom colors if the old tag had one
+      if (customTagColors[oldName]) {
+        const newCustomColors = { ...customTagColors };
+        newCustomColors[newName.trim()] = newCustomColors[oldName];
+        delete newCustomColors[oldName];
+        saveCustomTagColors(newCustomColors);
+      }
+
+      // Save changes to the server for each affected contact
+      const contactsToUpdate = contacts.filter(
+        (contact) => contact.tags && contact.tags.includes(oldName)
+      );
+
+      const responses = await Promise.all(
+        contactsToUpdate.map((contact) => {
+          const newTags = contact.tags!.map((tag) =>
+            tag === oldName ? newName.trim() : tag
+          );
+          return fetch(`/api/contacts/${contact.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: contact.name,
+              email: contact.email,
+              company: contact.company,
+              hidden: contact.hidden,
+              starred: contact.starred,
+              tags: newTags,
+            }),
+          });
+        })
+      );
+
+      // Check if all requests were successful
+      const failedRequests = responses.filter((response) => !response.ok);
+      if (failedRequests.length > 0) {
+        throw new Error(`Failed to update ${failedRequests.length} contact(s)`);
+      }
+
+      console.log(
+        `Tag renamed from "${oldName}" to "${newName}" for ${contactsToUpdate.length} contacts`
+      );
+    } catch (error) {
+      console.error("Error renaming tag:", error);
+      setLastSaveError(
+        error instanceof Error ? error.message : "Failed to rename tag"
+      );
+
+      // Revert changes on error
+      setContacts(contacts);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updateTagColor = (
+    tagName: string,
+    color: { bg: string; text: string; border: string }
+  ) => {
+    const newCustomColors = { ...customTagColors };
+    newCustomColors[tagName] = color;
+    saveCustomTagColors(newCustomColors);
   };
 
   // Group contacts by company
@@ -512,10 +1027,20 @@ export default function Home() {
       }
     });
 
-    // Calculate company hidden state based on all contacts being hidden
+    // Calculate company hidden, starred states, and aggregate tags
     const companies = Array.from(companiesMap.values());
     companies.forEach((company) => {
       company.hidden = company.contacts.every((contact) => contact.hidden);
+      company.starred = company.contacts.some((contact) => contact.starred);
+
+      // Aggregate unique tags from all contacts in the company
+      const allTags = new Set<string>();
+      company.contacts.forEach((contact) => {
+        if (contact.tags) {
+          contact.tags.forEach((tag) => allTags.add(tag));
+        }
+      });
+      company.tags = Array.from(allTags).sort();
     });
 
     return companies;
@@ -523,6 +1048,10 @@ export default function Home() {
 
   const sortCompanies = (companies: Company[]) => {
     return [...companies].sort((a, b) => {
+      // Always prioritize starred companies first
+      if (a.starred && !b.starred) return -1;
+      if (!a.starred && b.starred) return 1;
+
       let aVal: string | number;
       let bVal: string | number;
 
@@ -585,6 +1114,10 @@ export default function Home() {
 
   const sortContacts = (contacts: Contact[]) => {
     return [...contacts].sort((a, b) => {
+      // Always prioritize starred contacts first
+      if (a.starred && !b.starred) return -1;
+      if (!a.starred && b.starred) return 1;
+
       let aVal: string | number;
       let bVal: string | number;
 
@@ -632,6 +1165,33 @@ export default function Home() {
       loadContacts();
     }
   }, [session]);
+
+  // Extract all unique tags from contacts for autocomplete
+  useEffect(() => {
+    const allTagsSet = new Set<string>();
+    contacts.forEach((contact) => {
+      if (contact.tags) {
+        contact.tags.forEach((tag) => allTagsSet.add(tag));
+      }
+    });
+    setAllTags(Array.from(allTagsSet).sort());
+  }, [contacts]);
+
+  // Load custom tag colors from localStorage
+  useEffect(() => {
+    const savedColors = localStorage.getItem("rolodex-custom-tag-colors");
+    if (savedColors) {
+      setCustomTagColors(JSON.parse(savedColors));
+    }
+  }, []);
+
+  // Save custom tag colors to localStorage
+  const saveCustomTagColors = (
+    colors: Record<string, { bg: string; text: string; border: string }>
+  ) => {
+    setCustomTagColors(colors);
+    localStorage.setItem("rolodex-custom-tag-colors", JSON.stringify(colors));
+  };
 
   // Auto-sync functionality moved to settings page
   useEffect(() => {
@@ -827,6 +1387,8 @@ export default function Home() {
             email: contact.email,
             company: contact.company,
             hidden: contact.hidden,
+            starred: contact.starred,
+            tags: contact.tags || [],
           }),
         });
 
@@ -908,25 +1470,50 @@ export default function Home() {
     const matchesSearch =
       contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (contact.company || "").toLowerCase().includes(searchTerm.toLowerCase());
+      (contact.company || "")
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      (contact.tags || []).some((tag) =>
+        tag.toLowerCase().includes(searchTerm.toLowerCase())
+      );
 
     const isVisible = showHidden || !contact.hidden;
+    const matchesStarred = !showStarred || contact.starred;
+    const matchesTags =
+      selectedTags.length === 0 ||
+      selectedTags.some((selectedTag) =>
+        (contact.tags || []).includes(selectedTag)
+      );
 
     const matchesSource =
       (contact.source === "Gmail" && showGmail) ||
       (contact.source === "Calendar" && showCalendar);
 
-    return matchesSearch && isVisible && matchesSource;
+    return (
+      matchesSearch &&
+      isVisible &&
+      matchesStarred &&
+      matchesTags &&
+      matchesSource
+    );
   });
 
   const filteredCompanies = groupContactsByCompany(filteredContacts).filter(
     (company) => {
-      const matchesSearch = company.name
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
+      const matchesSearch =
+        company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (company.tags || []).some((tag) =>
+          tag.toLowerCase().includes(searchTerm.toLowerCase())
+        );
       const isVisible = showHidden || !company.hidden;
+      const matchesStarred = !showStarred || company.starred;
+      const matchesTags =
+        selectedTags.length === 0 ||
+        selectedTags.some((selectedTag) =>
+          (company.tags || []).includes(selectedTag)
+        );
 
-      return matchesSearch && isVisible;
+      return matchesSearch && isVisible && matchesStarred && matchesTags;
     }
   );
 
@@ -1017,18 +1604,109 @@ export default function Home() {
                   variant="outline"
                   size="sm"
                   className={`relative ${
-                    !showGmail || !showCalendar || showHidden
+                    !showGmail ||
+                    !showCalendar ||
+                    showHidden ||
+                    showStarred ||
+                    selectedTags.length > 0
                       ? "border-blue-500 bg-blue-50 hover:bg-blue-100"
                       : ""
                   }`}
                 >
                   <SlidersHorizontal className="h-4 w-4" />
-                  {(!showGmail || !showCalendar || showHidden) && (
+                  {(!showGmail ||
+                    !showCalendar ||
+                    showHidden ||
+                    showStarred ||
+                    selectedTags.length > 0) && (
                     <span className="absolute -top-1 -right-1 h-2 w-2 bg-blue-500 rounded-full"></span>
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem
+                  onSelect={(e) => e.preventDefault()}
+                  onClick={() => setShowStarred(!showStarred)}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <Star className="h-4 w-4" />
+                  <span>Starred only</span>
+                  {showStarred && <Check className="h-4 w-4 ml-auto" />}
+                </DropdownMenuItem>
+
+                {/* Tag filter section */}
+                {allTags.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="flex items-center gap-2">
+                      <Tag className="h-4 w-4" />
+                      Filter by tags
+                      {selectedTags.length > 0 && (
+                        <button
+                          onClick={() => setSelectedTags([])}
+                          className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Clear all
+                        </button>
+                      )}
+                    </DropdownMenuLabel>
+                    <div className="px-2 py-1 max-h-32 overflow-y-auto">
+                      <div className="space-y-1">
+                        {allTags.slice(0, 8).map((tag) => {
+                          const colors = getTagColor(tag, customTagColors);
+                          return (
+                            <DropdownMenuItem
+                              key={tag}
+                              onSelect={(e) => e.preventDefault()}
+                              onClick={() => {
+                                if (selectedTags.includes(tag)) {
+                                  setSelectedTags(
+                                    selectedTags.filter((t) => t !== tag)
+                                  );
+                                } else {
+                                  setSelectedTags([...selectedTags, tag]);
+                                }
+                              }}
+                              className="flex items-center gap-2 cursor-pointer text-xs"
+                            >
+                              <span
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${colors.bg} ${colors.text}`}
+                              >
+                                <span className="truncate">{tag}</span>
+                              </span>
+                              <div className="flex items-center ml-auto gap-1">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingTag({
+                                      oldName: tag,
+                                      newName: tag,
+                                    });
+                                    setShowTagManager(true);
+                                  }}
+                                  className="hover:bg-muted/50 p-1 rounded opacity-60 hover:opacity-100"
+                                  title="Edit tag"
+                                >
+                                  <Pencil className="h-2.5 w-2.5" />
+                                </button>
+                                {selectedTags.includes(tag) && (
+                                  <Check className="h-3 w-3" />
+                                )}
+                              </div>
+                            </DropdownMenuItem>
+                          );
+                        })}
+                        {allTags.length > 8 && (
+                          <div className="text-xs text-muted-foreground px-2 py-1">
+                            +{allTags.length - 8} more tags available
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onSelect={(e) => e.preventDefault()}
                   onClick={() => setShowGmail(!showGmail)}
@@ -1105,28 +1783,30 @@ export default function Home() {
               <Table className="table-fixed w-full">
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12 text-center"></TableHead>
                     <TableHead
                       onClick={() => handleSort("name")}
-                      className="cursor-pointer hover:bg-muted/50 w-1/5"
+                      className="cursor-pointer hover:bg-muted/50 w-[15%]"
                     >
                       Name {getSortIcon("name")}
                     </TableHead>
                     <TableHead
                       onClick={() => handleSort("email")}
-                      className="cursor-pointer hover:bg-muted/50 w-2/5"
+                      className="cursor-pointer hover:bg-muted/50 w-[25%]"
                     >
                       Email {getSortIcon("email")}
                     </TableHead>
                     <TableHead
                       onClick={() => handleSort("company")}
-                      className="cursor-pointer hover:bg-muted/50 w-1/5"
+                      className="cursor-pointer hover:bg-muted/50 w-[15%]"
                     >
                       Company {getSortIcon("company")}
                     </TableHead>
+                    <TableHead className="w-[20%]">Tags</TableHead>
                     <TableHead className="w-12 text-center">Source</TableHead>
                     <TableHead
                       onClick={() => handleSort("lastContact")}
-                      className="cursor-pointer hover:bg-muted/50 whitespace-nowrap w-1/5 text-right"
+                      className="cursor-pointer hover:bg-muted/50 whitespace-nowrap w-[15%] text-right"
                     >
                       Last Contact {getSortIcon("lastContact")}
                     </TableHead>
@@ -1137,20 +1817,61 @@ export default function Home() {
                     <TableRow
                       key={contact.id}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleContactClick(contact)}
                     >
-                      <TableCell className="font-medium truncate pr-4">
+                      <TableCell className="text-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateContactStarred(contact.id, !contact.starred);
+                          }}
+                          className="hover:bg-muted/50 p-1 rounded transition-colors"
+                          title={
+                            contact.starred ? "Unstar contact" : "Star contact"
+                          }
+                        >
+                          <Star
+                            className={`h-4 w-4 ${
+                              contact.starred
+                                ? "fill-yellow-400 text-yellow-400"
+                                : "text-gray-400 hover:text-yellow-400"
+                            }`}
+                          />
+                        </button>
+                      </TableCell>
+                      <TableCell
+                        className="font-medium truncate pr-4"
+                        onClick={() => handleContactClick(contact)}
+                      >
                         <span className="truncate">{contact.name}</span>
                       </TableCell>
-                      <TableCell className="text-muted-foreground truncate pr-4">
+                      <TableCell
+                        className="text-muted-foreground truncate pr-4"
+                        onClick={() => handleContactClick(contact)}
+                      >
                         {contact.email}
                       </TableCell>
-                      <TableCell className="text-muted-foreground truncate pr-4">
+                      <TableCell
+                        className="text-muted-foreground truncate pr-4"
+                        onClick={() => handleContactClick(contact)}
+                      >
                         <span className="truncate">
                           {contact.company || "—"}
                         </span>
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell
+                        className="pr-4"
+                        onClick={() => handleContactClick(contact)}
+                      >
+                        <TagDisplay
+                          tags={contact.tags || []}
+                          maxDisplay={2}
+                          customColors={customTagColors}
+                        />
+                      </TableCell>
+                      <TableCell
+                        className="text-center"
+                        onClick={() => handleContactClick(contact)}
+                      >
                         <div className="flex justify-center">
                           {contact.source === "Gmail" ? (
                             <img
@@ -1171,7 +1892,10 @@ export default function Home() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground whitespace-nowrap text-right">
+                      <TableCell
+                        className="text-muted-foreground whitespace-nowrap text-right"
+                        onClick={() => handleContactClick(contact)}
+                      >
                         <span className="text-sm">
                           {formatRelativeDate(contact.lastContact)}
                         </span>
@@ -1184,21 +1908,23 @@ export default function Home() {
               <Table className="table-fixed w-full">
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12 text-center"></TableHead>
                     <TableHead
                       onClick={() => handleSort("name")}
-                      className="cursor-pointer hover:bg-muted/50 w-2/5"
+                      className="cursor-pointer hover:bg-muted/50 w-[25%]"
                     >
                       Company {getSortIcon("name")}
                     </TableHead>
                     <TableHead
                       onClick={() => handleSort("company")}
-                      className="cursor-pointer hover:bg-muted/50 w-1/5"
+                      className="cursor-pointer hover:bg-muted/50 w-[15%]"
                     >
                       Contacts {getSortIcon("company")}
                     </TableHead>
+                    <TableHead className="w-[25%]">Tags</TableHead>
                     <TableHead
                       onClick={() => handleSort("lastContact")}
-                      className="cursor-pointer hover:bg-muted/50 whitespace-nowrap w-2/5 text-right"
+                      className="cursor-pointer hover:bg-muted/50 whitespace-nowrap w-[25%] text-right"
                     >
                       Last Contact {getSortIcon("lastContact")}
                     </TableHead>
@@ -1209,16 +1935,57 @@ export default function Home() {
                     <TableRow
                       key={company.name}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleCompanyClick(company)}
                     >
-                      <TableCell className="font-medium truncate pr-4">
+                      <TableCell className="text-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateCompanyStarred(
+                              company.name,
+                              !company.starred
+                            );
+                          }}
+                          className="hover:bg-muted/50 p-1 rounded transition-colors"
+                          title={
+                            company.starred ? "Unstar company" : "Star company"
+                          }
+                        >
+                          <Star
+                            className={`h-4 w-4 ${
+                              company.starred
+                                ? "fill-yellow-400 text-yellow-400"
+                                : "text-gray-400 hover:text-yellow-400"
+                            }`}
+                          />
+                        </button>
+                      </TableCell>
+                      <TableCell
+                        className="font-medium truncate pr-4"
+                        onClick={() => handleCompanyClick(company)}
+                      >
                         <span className="truncate">{company.name}</span>
                       </TableCell>
-                      <TableCell className="text-muted-foreground truncate pr-4">
+                      <TableCell
+                        className="text-muted-foreground truncate pr-4"
+                        onClick={() => handleCompanyClick(company)}
+                      >
                         {company.contactCount} contact
                         {company.contactCount !== 1 ? "s" : ""}
                       </TableCell>
-                      <TableCell className="text-muted-foreground whitespace-nowrap text-right">
+                      <TableCell
+                        className="pr-4"
+                        onClick={() => handleCompanyClick(company)}
+                      >
+                        <TagDisplay
+                          tags={company.tags || []}
+                          maxDisplay={3}
+                          customColors={customTagColors}
+                        />
+                      </TableCell>
+                      <TableCell
+                        className="text-muted-foreground whitespace-nowrap text-right"
+                        onClick={() => handleCompanyClick(company)}
+                      >
                         <span className="text-sm">
                           {formatRelativeDate(company.lastContact)}
                         </span>
@@ -1349,7 +2116,43 @@ export default function Home() {
               </SheetHeader>
 
               <div className="mt-6 space-y-4">
-                <div className="space-y-2">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-muted-foreground">
+                      Tags
+                    </Label>
+                    <TagInput
+                      tags={selectedCompany.tags || []}
+                      onTagsChange={(newTags) => {
+                        // Update all contacts in this company with the new tags
+                        const updatedCompany = {
+                          ...selectedCompany,
+                          tags: newTags,
+                        };
+                        setSelectedCompany(updatedCompany);
+
+                        // Apply tags to all contacts in the company
+                        updateCompanyTags(selectedCompany.name, newTags);
+                      }}
+                      suggestions={allTags}
+                      placeholder="Add tags to all contacts in this company..."
+                      customColors={customTagColors}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium text-muted-foreground">
+                        Star Company
+                      </Label>
+                    </div>
+                    <Switch
+                      checked={selectedCompany.starred || false}
+                      onCheckedChange={(checked) => {
+                        updateCompanyStarred(selectedCompany.name, checked);
+                      }}
+                    />
+                  </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <Label className="text-sm font-medium text-muted-foreground">
@@ -1511,6 +2314,42 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label className="text-sm font-medium">Tags</Label>
+                  <TagInput
+                    tags={editedContact.tags || []}
+                    onTagsChange={(newTags) => {
+                      const updatedContact = {
+                        ...editedContact,
+                        tags: newTags,
+                      };
+                      setEditedContact(updatedContact);
+                      saveContactDebounced(updatedContact);
+                    }}
+                    suggestions={allTags}
+                    placeholder="Add tags..."
+                    customColors={customTagColors}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">
+                        Star Contact
+                      </Label>
+                    </div>
+                    <Switch
+                      checked={editedContact.starred || false}
+                      onCheckedChange={(checked) => {
+                        const updatedContact = {
+                          ...editedContact,
+                          starred: checked,
+                        };
+                        setEditedContact(updatedContact);
+                        saveContactDebounced(updatedContact);
+                      }}
+                    />
+                  </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <Label className="text-sm font-medium">
@@ -1612,6 +2451,120 @@ export default function Home() {
                   ) : null}
                 </div>
               )}
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Tag Management Sheet */}
+      <Sheet open={showTagManager} onOpenChange={setShowTagManager}>
+        <SheetContent className="w-[400px] sm:w-[500px] lg:w-[600px] max-w-[90vw] overflow-y-auto">
+          {editingTag && (
+            <>
+              <SheetHeader className="space-y-3">
+                <SheetTitle className="flex items-center gap-2">
+                  <Pencil className="h-4 w-4" />
+                  Edit Tag
+                </SheetTitle>
+                <SheetDescription>
+                  Edit the tag name and color. Changes will apply to all
+                  contacts and companies using this tag.
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="grid gap-6 py-6">
+                <div className="space-y-2">
+                  <Label htmlFor="tagName" className="text-sm font-medium">
+                    Tag Name
+                  </Label>
+                  <Input
+                    id="tagName"
+                    value={editingTag.newName}
+                    onChange={(e) => {
+                      setEditingTag({
+                        ...editingTag,
+                        newName: e.target.value,
+                      });
+                    }}
+                    placeholder="Tag name"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Color</Label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {TAG_COLORS.map((color, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          setEditingTag({
+                            ...editingTag,
+                            color: color,
+                          });
+                        }}
+                        className={`h-8 w-full rounded-md border-2 ${
+                          color.bg
+                        } ${color.text} ${
+                          editingTag.color === color ||
+                          (!editingTag.color &&
+                            getTagColor(editingTag.oldName, customTagColors) ===
+                              color)
+                            ? "border-gray-900"
+                            : "border-gray-200 hover:border-gray-400"
+                        } flex items-center justify-center text-xs font-medium`}
+                      >
+                        Aa
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Current:{" "}
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded ${
+                        editingTag.color
+                          ? `${editingTag.color.bg} ${editingTag.color.text}`
+                          : `${
+                              getTagColor(editingTag.oldName, customTagColors)
+                                .bg
+                            } ${
+                              getTagColor(editingTag.oldName, customTagColors)
+                                .text
+                            }`
+                      }`}
+                    >
+                      {editingTag.newName}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={async () => {
+                      if (editingTag.color) {
+                        updateTagColor(editingTag.newName, editingTag.color);
+                      }
+                      if (editingTag.oldName !== editingTag.newName) {
+                        await renameTag(editingTag.oldName, editingTag.newName);
+                      }
+                      setShowTagManager(false);
+                      setEditingTag(null);
+                    }}
+                    disabled={!editingTag.newName.trim()}
+                    className="flex-1"
+                  >
+                    Save Changes
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowTagManager(false);
+                      setEditingTag(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
             </>
           )}
         </SheetContent>
