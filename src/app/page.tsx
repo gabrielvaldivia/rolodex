@@ -21,7 +21,14 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Settings, RefreshCw, ExternalLink, Eye, EyeOff } from "lucide-react";
+import {
+  Settings,
+  RefreshCw,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  X,
+} from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { RichText } from "@/components/RichText";
@@ -922,16 +929,28 @@ export default function Home() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <Input
-              placeholder={
-                currentView === "contacts"
-                  ? "Search contacts..."
-                  : "Search companies..."
-              }
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm h-8"
-            />
+            <div className="relative max-w-sm">
+              <Input
+                placeholder={
+                  currentView === "contacts"
+                    ? "Search contacts..."
+                    : "Search companies..."
+                }
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-8 pr-8"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-8 w-8 p-0 hover:bg-transparent"
+                  onClick={() => setSearchTerm("")}
+                >
+                  <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                </Button>
+              )}
+            </div>
             <Button
               onClick={() => setShowHidden(!showHidden)}
               variant={showHidden ? "default" : "outline"}
