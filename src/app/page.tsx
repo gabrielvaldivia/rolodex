@@ -2473,7 +2473,7 @@ export default function Home() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12 text-center"></TableHead>
-                      <TableHead className="w-12 text-center">Photo</TableHead>
+                      <TableHead className="w-12 text-center"></TableHead>
                       <TableHead
                         onClick={() => handleSort("name")}
                         className="cursor-pointer hover:bg-muted/50 w-[18%]"
