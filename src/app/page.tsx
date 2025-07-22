@@ -469,7 +469,7 @@ const KanbanCard: React.FC<KanbanCardProps> = ({
         )}
       </div>
 
-      <div className="text-xs text-muted-foreground mb-2">
+      <div className="text-xs text-muted-foreground">
         {formatRelativeDate(lastContact)}
       </div>
     </div>
