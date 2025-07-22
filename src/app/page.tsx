@@ -2295,12 +2295,25 @@ export default function Home() {
                               }}
                               className="flex items-center gap-2 cursor-pointer text-xs"
                             >
-                              <span
-                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${colors.bg} ${colors.text}`}
-                              >
-                                <span className="truncate">{tag}</span>
-                              </span>
-                              <div className="flex items-center ml-auto gap-1">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className={`flex items-center justify-center w-4 h-4 rounded-sm border-2 ${
+                                    selectedTags.includes(tag)
+                                      ? "bg-primary border-primary"
+                                      : "border-muted-foreground/30"
+                                  }`}
+                                >
+                                  {selectedTags.includes(tag) && (
+                                    <Check className="h-3 w-3 text-primary-foreground" />
+                                  )}
+                                </div>
+                                <span
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${colors.bg} ${colors.text}`}
+                                >
+                                  <span className="truncate">{tag}</span>
+                                </span>
+                              </div>
+                              <div className="flex items-center ml-auto">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -2315,9 +2328,6 @@ export default function Home() {
                                 >
                                   <Pencil className="h-3 w-3" />
                                 </button>
-                                {selectedTags.includes(tag) && (
-                                  <Check className="h-3 w-3" />
-                                )}
                               </div>
                             </DropdownMenuItem>
                           );
@@ -2338,13 +2348,21 @@ export default function Home() {
                           }}
                           className="flex items-center gap-2 cursor-pointer text-xs"
                         >
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded bg-gray-100 text-gray-800">
-                            <span className="truncate">No Tags</span>
-                          </span>
-                          <div className="flex items-center ml-auto">
-                            {selectedTags.includes("No Tags") && (
-                              <Check className="h-3 w-3" />
-                            )}
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`flex items-center justify-center w-4 h-4 rounded-sm border-2 ${
+                                selectedTags.includes("No Tags")
+                                  ? "bg-primary border-primary"
+                                  : "border-muted-foreground/30"
+                              }`}
+                            >
+                              {selectedTags.includes("No Tags") && (
+                                <Check className="h-3 w-3 text-primary-foreground" />
+                              )}
+                            </div>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded bg-gray-100 text-gray-800">
+                              <span className="truncate">No Tags</span>
+                            </span>
                           </div>
                         </DropdownMenuItem>
                         {allTags.length > 8 && (
