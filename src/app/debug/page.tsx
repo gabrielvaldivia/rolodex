@@ -86,11 +86,18 @@ export default function DebugPage() {
         <div className="border p-4 rounded">
           <h2 className="font-semibold mb-2">Browser Info</h2>
           <p>
-            <strong>User Agent:</strong> {navigator.userAgent}
+            <strong>User Agent:</strong>{" "}
+            {typeof window !== "undefined"
+              ? navigator.userAgent
+              : "Server-side"}
           </p>
           <p>
             <strong>Cookies Enabled:</strong>{" "}
-            {navigator.cookieEnabled ? "✅" : "❌"}
+            {typeof window !== "undefined"
+              ? navigator.cookieEnabled
+                ? "✅"
+                : "❌"
+              : "Server-side"}
           </p>
           <p>
             <strong>Local Storage:</strong>{" "}

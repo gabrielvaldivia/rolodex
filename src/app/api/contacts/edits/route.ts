@@ -18,8 +18,13 @@ const EDITS_COLLECTION = 'contact-edits'
 
 // Load existing edits from Firestore
 async function loadEdits(): Promise<Record<string, ContactEdit>> {
+  if (!db) {
+    console.warn('Firebase not initialized, returning empty edits')
+    return {}
+  }
+  
   try {
-    const editsRef = collection(db, EDITS_COLLECTION)
+    const editsRef = collection(db as Firestore, EDITS_COLLECTION)
     const querySnapshot = await getDocs(editsRef)
     const edits: Record<string, ContactEdit> = {}
     
@@ -41,8 +46,13 @@ async function loadEdits(): Promise<Record<string, ContactEdit>> {
 
 // Save edit to Firestore
 async function saveEdit(edit: ContactEdit): Promise<void> {
+  if (!db) {
+    console.warn('Firebase not initialized, edit not saved for:', edit.id)
+    return
+  }
+
   try {
-    const editRef = doc(db, EDITS_COLLECTION, edit.id)
+    const editRef = doc(db as Firestore, EDITS_COLLECTION, edit.id)
     await setDoc(editRef, {
       ...edit,
       updatedAt: serverTimestamp()

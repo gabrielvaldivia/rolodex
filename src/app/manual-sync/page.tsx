@@ -4,9 +4,20 @@ import { signIn, signOut, getSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
+interface ExtendedSession {
+  accessToken?: string;
+  user?: {
+    email?: string;
+    name?: string;
+    image?: string;
+  };
+}
+
 export default function ManualSync() {
   const [status, setStatus] = useState<string>("");
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<
+    { id: string; name: string; email: string }[]
+  >([]);
 
   const handleFreshSignIn = async () => {
     setStatus("Signing in with fresh session...");
@@ -25,13 +36,13 @@ export default function ManualSync() {
         const session = await getSession();
         console.log("Fresh session:", session);
 
-        if (session && (session as any).accessToken) {
+        if (session && (session as ExtendedSession).accessToken) {
           setStatus(
             `✅ Got access token: ${(
-              (session as any).accessToken as string
-            ).substring(0, 20)}...`
+              session as ExtendedSession
+            ).accessToken!.substring(0, 20)}...`
           );
-          await testContactsAPI((session as any).accessToken);
+          await testContactsAPI((session as ExtendedSession).accessToken!);
         } else {
           setStatus("❌ Still no access token in session");
         }
