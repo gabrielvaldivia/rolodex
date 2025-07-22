@@ -118,8 +118,7 @@ export default function Settings() {
             onClick={() => router.push("/")}
             className="flex items-center gap-2"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Contacts
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-2xl font-medium">Settings</h1>
         </div>
@@ -130,9 +129,6 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle>Auto Sync</CardTitle>
-              <CardDescription>
-                Automatically sync contacts from Google services every hour
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
@@ -148,15 +144,15 @@ export default function Settings() {
                   onCheckedChange={handleAutoSyncToggle}
                 />
               </div>
-              {lastAutoSync && (
-                <div className="text-sm text-muted-foreground">
-                  Last auto-sync: {lastAutoSync}
-                </div>
-              )}
-              <div className="pt-2">
+              <div className="pt-2 flex items-center gap-3">
                 <Button onClick={handleManualSync} variant="outline" size="sm">
                   Sync Now
                 </Button>
+                {lastAutoSync && (
+                  <div className="text-xs text-muted-foreground">
+                    Last sync: {lastAutoSync}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -165,9 +161,6 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle>Account</CardTitle>
-              <CardDescription>
-                Manage your account and authentication
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
@@ -188,9 +181,6 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle>Data</CardTitle>
-              <CardDescription>
-                Manage your contact data and cache
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
