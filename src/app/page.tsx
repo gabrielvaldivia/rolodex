@@ -1978,9 +1978,18 @@ export default function Home() {
           console.log("Assuming success despite parse error");
         }
 
-        // Update the contact in the contacts array
+        // Update the contact in the contacts array, preserving the original lastContact
         const updatedContacts = contacts.map((c) =>
-          c.id === contact.id ? contact : c
+          c.id === contact.id
+            ? {
+                ...contact,
+                lastContact: c.lastContact, // Preserve original lastContact timestamp
+                source: c.source, // Preserve original source
+                lastEmailSubject: c.lastEmailSubject, // Preserve original email data
+                lastEmailPreview: c.lastEmailPreview,
+                lastMeetingName: c.lastMeetingName,
+              }
+            : c
         );
         setContacts(updatedContacts);
 
@@ -2872,6 +2881,174 @@ export default function Home() {
                       placeholder="Add tags to all contacts in this company..."
                       customColors={customTagColors}
                     />
+                  </div>
+                </div>
+
+                {/* Last Contact Section - Same as Contact Sheet */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Last Contact</Label>
+                  <div className="space-y-2">
+                    {(() => {
+                      // Find the most recent contact with email/meeting data
+                      const contactsWithData = selectedCompany.contacts
+                        .filter(
+                          (contact) =>
+                            contact.lastEmailSubject || contact.lastMeetingName
+                        )
+                        .sort((a, b) => {
+                          if (
+                            a.lastContact === "Unknown" &&
+                            b.lastContact === "Unknown"
+                          )
+                            return 0;
+                          if (a.lastContact === "Unknown") return 1;
+                          if (b.lastContact === "Unknown") return -1;
+                          return (
+                            new Date(b.lastContact).getTime() -
+                            new Date(a.lastContact).getTime()
+                          );
+                        });
+
+                      const mostRecentContact = contactsWithData[0];
+
+                      // If the most recent is a meeting, also find the most recent email
+                      let mostRecentEmail = null;
+                      if (
+                        mostRecentContact &&
+                        mostRecentContact.source === "Calendar"
+                      ) {
+                        const emailContacts = selectedCompany.contacts
+                          .filter((contact) => contact.lastEmailSubject)
+                          .sort((a, b) => {
+                            if (
+                              a.lastContact === "Unknown" &&
+                              b.lastContact === "Unknown"
+                            )
+                              return 0;
+                            if (a.lastContact === "Unknown") return 1;
+                            if (b.lastContact === "Unknown") return -1;
+                            return (
+                              new Date(b.lastContact).getTime() -
+                              new Date(a.lastContact).getTime()
+                            );
+                          });
+                        mostRecentEmail = emailContacts[0];
+                      }
+
+                      return mostRecentContact &&
+                        (mostRecentContact.lastEmailSubject ||
+                          mostRecentContact.lastMeetingName) ? (
+                        <div className="space-y-3">
+                          {/* Most recent interaction (meeting or email) */}
+                          <div className="space-y-1">
+                            <div className="bg-muted/50 border border-input rounded-md px-3 py-2 text-sm space-y-2 overflow-hidden relative">
+                              <div className="absolute top-2 right-2">
+                                {mostRecentContact.source === "Gmail" ? (
+                                  <button
+                                    onClick={() => openGmail(mostRecentContact)}
+                                    className="hover:bg-muted/50 p-1 rounded transition-colors"
+                                    title="Open in Gmail"
+                                  >
+                                    <img
+                                      src="/icons/gmail.png"
+                                      alt="Gmail"
+                                      className="h-4 w-4"
+                                    />
+                                  </button>
+                                ) : mostRecentContact.source === "Calendar" ? (
+                                  <button
+                                    onClick={() =>
+                                      openCalendar(mostRecentContact)
+                                    }
+                                    className="hover:bg-muted/50 p-1 rounded transition-colors"
+                                    title="Open in Google Calendar"
+                                  >
+                                    <img
+                                      src="/icons/calendar.png"
+                                      alt="Calendar"
+                                      className="h-4 w-4"
+                                    />
+                                  </button>
+                                ) : (
+                                  <div className="h-4 w-4 bg-muted-foreground rounded-full" />
+                                )}
+                              </div>
+                              <div className="text-muted-foreground text-xs">
+                                {formatRegularDate(
+                                  mostRecentContact.lastContact
+                                )}
+                              </div>
+                              <div className="font-medium">
+                                <RichText
+                                  content={
+                                    mostRecentContact.lastEmailSubject ||
+                                    mostRecentContact.lastMeetingName ||
+                                    ""
+                                  }
+                                  className="prose-sm font-medium"
+                                />
+                              </div>
+                              {mostRecentContact.lastEmailPreview && (
+                                <div className="text-foreground max-w-full overflow-hidden">
+                                  <EmailText
+                                    content={mostRecentContact.lastEmailPreview}
+                                    className="break-words"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* If most recent was a meeting, also show most recent email */}
+                          {mostRecentEmail &&
+                            mostRecentContact.source === "Calendar" && (
+                              <div className="space-y-1">
+                                <div className="text-xs text-muted-foreground font-medium">
+                                  Last Email
+                                </div>
+                                <div className="bg-muted/50 border border-input rounded-md px-3 py-2 text-sm space-y-2 overflow-hidden relative">
+                                  <div className="absolute top-2 right-2">
+                                    <button
+                                      onClick={() => openGmail(mostRecentEmail)}
+                                      className="hover:bg-muted/50 p-1 rounded transition-colors"
+                                      title="Open in Gmail"
+                                    >
+                                      <img
+                                        src="/icons/gmail.png"
+                                        alt="Gmail"
+                                        className="h-4 w-4"
+                                      />
+                                    </button>
+                                  </div>
+                                  <div className="text-muted-foreground text-xs">
+                                    {formatRegularDate(
+                                      mostRecentEmail.lastContact
+                                    )}
+                                  </div>
+                                  <div className="font-medium">
+                                    <RichText
+                                      content={
+                                        mostRecentEmail.lastEmailSubject || ""
+                                      }
+                                      className="prose-sm font-medium"
+                                    />
+                                  </div>
+                                  {mostRecentEmail.lastEmailPreview && (
+                                    <div className="text-foreground max-w-full overflow-hidden">
+                                      <EmailText
+                                        content={
+                                          mostRecentEmail.lastEmailPreview
+                                        }
+                                        className="break-words"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
 
