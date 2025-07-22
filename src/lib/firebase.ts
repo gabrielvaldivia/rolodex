@@ -1,5 +1,5 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp, FirebaseApp } from 'firebase/app';
+import { getFirestore, Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -21,8 +21,8 @@ const requiredEnvVars = [
 ];
 
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-let app = null;
-let db = null;
+let app: FirebaseApp | null = null;
+let db: Firestore | null = null;
 
 if (missingVars.length > 0) {
   console.warn('Missing Firebase environment variables:', missingVars);

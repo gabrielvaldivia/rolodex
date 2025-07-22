@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { collection, getDocs, doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
+import { collection, getDocs, doc, setDoc, serverTimestamp, Timestamp, Firestore } from 'firebase/firestore'
 
 interface ContactEdit {
   id: string
@@ -10,6 +10,7 @@ interface ContactEdit {
   hidden?: boolean
   starred?: boolean
   tags?: string[]
+  photoUrl?: string
   updatedAt?: Timestamp | string
 }
 
@@ -52,13 +53,43 @@ async function saveEdit(edit: ContactEdit): Promise<void> {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
+  if (!db) {
+    console.warn('Firebase not initialized, returning empty edits')
+    return NextResponse.json({})
+  }
+
   try {
-    const edits = await loadEdits()
+    const editsCollection = collection(db as Firestore, 'contact-edits')
+    const snapshot = await getDocs(editsCollection)
+    
+    const edits: Record<string, ContactEdit> = {}
+    
+    snapshot.forEach((doc) => {
+      const data = doc.data()
+      const edit: ContactEdit = {
+        id: doc.id,
+        name: data.name,
+        email: data.email,
+        company: data.company,
+        hidden: data.hidden,
+        starred: data.starred,
+        tags: data.tags,
+        updatedAt: data.updatedAt
+      }
+      
+      // Only include photoUrl if it exists (avoid undefined values)
+      if (data.photoUrl) {
+        edit.photoUrl = data.photoUrl
+      }
+      
+      edits[doc.id] = edit
+    })
+    
     return NextResponse.json(edits)
   } catch (error) {
-    console.error('Error fetching contact edits:', error)
-    return NextResponse.json({ error: 'Failed to fetch contact edits' }, { status: 500 })
+    console.error('Error fetching edits:', error)
+    return NextResponse.json({ error: 'Failed to fetch edits' }, { status: 500 })
   }
 }
 

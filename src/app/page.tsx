@@ -51,6 +51,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { RichText } from "@/components/RichText";
 import { EmailText } from "@/components/EmailText";
+import { ContactAvatar } from "@/components/ContactAvatar";
 
 interface Contact {
   id: string;
@@ -811,6 +812,7 @@ export default function Home() {
             hidden: edit.hidden || contact.hidden,
             starred: edit.starred || contact.starred,
             tags: edit.tags || contact.tags,
+            photoUrl: edit.photoUrl || contact.photoUrl,
           };
         }
         return contact;
@@ -1827,8 +1829,13 @@ export default function Home() {
       if (!response.ok) {
         const errorData = await response.json();
         if (response.status === 401) {
-          console.error("Authentication failed. Please sign in again.");
-          // Force sign out to refresh the session
+          console.error(
+            "Authentication failed. Please sign in again to get updated permissions for contact photos."
+          );
+          // Force sign out to refresh the session with new scopes
+          alert(
+            "Please sign out and sign in again to enable contact photo fetching with updated permissions."
+          );
           signOut();
           return;
         }
@@ -1836,61 +1843,37 @@ export default function Home() {
       }
 
       const data = await response.json();
+      console.log("Raw contacts from API:", data.slice(0, 3)); // Debug: check if photos are in API response
 
       // Apply any existing edits to the contacts
       const contactsWithEdits = await applyEditsToContacts(data);
       console.log(
-        "Contacts loaded with tags:",
-        contactsWithEdits
-          .map((c) => ({ id: c.id, name: c.name, tags: c.tags }))
-          .slice(0, 3)
-      );
+        "Contacts with edits applied:",
+        contactsWithEdits.slice(0, 3)
+      ); // Debug: check if photos persist after edits
+      console.log(
+        "Contact photos found:",
+        contactsWithEdits.filter((c) => c.photoUrl).length,
+        "out of",
+        contactsWithEdits.length,
+        "total contacts"
+      ); // Debug: count how many contacts have photos
+
       setContacts(contactsWithEdits);
 
-      // Only cache non-empty contact arrays to prevent overwriting good data with auth failures
-      if (data.length > 0) {
-        // Cache the contacts and timestamp
-        localStorage.setItem("rolodex-contacts", JSON.stringify(data));
-        localStorage.setItem("rolodex-contacts-time", Date.now().toString());
+      // Cache the contacts for 6 hours
+      localStorage.setItem("rolodex-contacts", JSON.stringify(data));
+      localStorage.setItem("rolodex-contacts-time", Date.now().toString());
 
-        // Update last sync time
-        const now = new Date().toLocaleTimeString();
-        localStorage.setItem("rolodex-last-sync", now);
-
-        console.log(`Cached ${data.length} contacts`);
-      } else {
-        console.log(
-          "Received empty contact array, not caching to preserve existing data"
-        );
-      }
+      console.log(`Cached ${data.length} contacts`);
     } catch (error) {
       console.error("Error fetching contacts:", error);
-
-      // Check if we have cached contacts to fall back to
-      const cachedContacts = localStorage.getItem("rolodex-contacts");
-      console.log("Cached contacts available:", cachedContacts ? "Yes" : "No");
-
-      if (cachedContacts) {
-        console.log("Attempting to load from cache due to API error");
-        try {
-          const baseContacts = JSON.parse(cachedContacts);
-          console.log(`Found ${baseContacts.length} cached contacts`);
-          const contactsWithEdits = await applyEditsToContacts(baseContacts);
-          setContacts(contactsWithEdits);
-          console.log("Successfully loaded contacts from cache");
-          return; // Don't clear cache if we successfully loaded from it
-        } catch (cacheError) {
-          console.error("Error loading cached contacts:", cacheError);
-        }
-      }
-
-      // Only clear cache if we couldn't load from it or if it's a real server error
-      console.log("Clearing cache due to error");
-      localStorage.removeItem("rolodex-contacts");
-      localStorage.removeItem("rolodex-contacts-time");
     } finally {
-      setLoading(false);
-      setBackgroundSyncing(false);
+      if (background) {
+        setBackgroundSyncing(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
@@ -1921,21 +1904,38 @@ export default function Home() {
           hidden: contact.hidden,
           starred: contact.starred,
           tags: contact.tags || [],
+          photoUrl: contact.photoUrl,
         });
 
         console.log("Contact tags before save:", contact.tags);
 
+        // Create request body, only include photoUrl if it has a value
+        const requestBody: {
+          name: string;
+          email: string;
+          company: string;
+          hidden: boolean;
+          starred: boolean;
+          tags: string[];
+          photoUrl?: string;
+        } = {
+          name: contact.name,
+          email: contact.email,
+          company: contact.company || "",
+          hidden: contact.hidden || false,
+          starred: contact.starred || false,
+          tags: contact.tags || [],
+        };
+
+        // Only add photoUrl if it exists to avoid Firebase undefined errors
+        if (contact.photoUrl) {
+          requestBody.photoUrl = contact.photoUrl;
+        }
+
         const response = await fetch(`/api/contacts/${contact.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: contact.name,
-            email: contact.email,
-            company: contact.company,
-            hidden: contact.hidden,
-            starred: contact.starred,
-            tags: contact.tags || [],
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         console.log("Response status:", response.status);
@@ -1988,6 +1988,7 @@ export default function Home() {
                 lastEmailSubject: c.lastEmailSubject, // Preserve original email data
                 lastEmailPreview: c.lastEmailPreview,
                 lastMeetingName: c.lastMeetingName,
+                photoUrl: contact.photoUrl, // Update photo URL
               }
             : c
         );
@@ -2455,6 +2456,7 @@ export default function Home() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12 text-center"></TableHead>
+                      <TableHead className="w-12 text-center">Photo</TableHead>
                       <TableHead
                         onClick={() => handleSort("name")}
                         className="cursor-pointer hover:bg-muted/50 w-[18%]"
@@ -2518,6 +2520,13 @@ export default function Home() {
                               }`}
                             />
                           </button>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <ContactAvatar
+                            contact={contact}
+                            size="sm"
+                            className="mx-auto"
+                          />
                         </TableCell>
                         <TableCell
                           className="font-medium truncate pr-4"
@@ -3116,73 +3125,76 @@ export default function Home() {
               <SheetHeader className="space-y-3">
                 <SheetTitle className="sr-only">Edit Contact</SheetTitle>
 
-                <div className="space-y-1">
-                  {editingName ? (
-                    <Input
-                      value={editedContact.name}
-                      onChange={(e) => {
-                        const updatedContact = {
-                          ...editedContact,
-                          name: e.target.value,
-                        };
-                        setEditedContact(updatedContact);
-                      }}
-                      onBlur={() => {
-                        saveContactDebounced(editedContact);
-                        setEditingName(false);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
+                <div className="flex items-center space-x-4">
+                  <ContactAvatar contact={editedContact} size="lg" />
+                  <div className="flex-1 min-w-0 space-y-0">
+                    {editingName ? (
+                      <Input
+                        value={editedContact.name}
+                        onChange={(e) => {
+                          const updatedContact = {
+                            ...editedContact,
+                            name: e.target.value,
+                          };
+                          setEditedContact(updatedContact);
+                        }}
+                        onBlur={() => {
                           saveContactDebounced(editedContact);
                           setEditingName(false);
-                        }
-                      }}
-                      className="text-lg font-semibold !border-0 !outline-0 border-none px-0 py-1 bg-transparent focus:ring-0 focus:border-none focus:outline-none focus:shadow-none focus:bg-transparent shadow-none h-auto min-h-0 rounded-none focus:ring-offset-0 focus:!border-0 focus:!outline-0"
-                      placeholder="Contact Name"
-                      autoFocus
-                    />
-                  ) : (
-                    <h1
-                      className="text-lg font-semibold cursor-pointer px-0 py-1 rounded truncate"
-                      onClick={() => setEditingName(true)}
-                      title={editedContact.name || "Contact Name"}
-                    >
-                      {editedContact.name || "Contact Name"}
-                    </h1>
-                  )}
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            saveContactDebounced(editedContact);
+                            setEditingName(false);
+                          }
+                        }}
+                        className="text-lg font-semibold !border-0 !outline-0 border-none px-0 py-1 bg-transparent focus:ring-0 focus:border-none focus:outline-none focus:shadow-none focus:bg-transparent shadow-none h-auto min-h-0 rounded-none focus:ring-offset-0 focus:!border-0 focus:!outline-0"
+                        placeholder="Contact Name"
+                        autoFocus
+                      />
+                    ) : (
+                      <h1
+                        className="text-lg font-semibold cursor-pointer px-0 py-1 rounded truncate"
+                        onClick={() => setEditingName(true)}
+                        title={editedContact.name || "Contact Name"}
+                      >
+                        {editedContact.name || "Contact Name"}
+                      </h1>
+                    )}
 
-                  {editingEmail ? (
-                    <Input
-                      value={editedContact.email}
-                      onChange={(e) => {
-                        const updatedContact = {
-                          ...editedContact,
-                          email: e.target.value,
-                        };
-                        setEditedContact(updatedContact);
-                      }}
-                      onBlur={() => {
-                        saveContactDebounced(editedContact);
-                        setEditingEmail(false);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
+                    {editingEmail ? (
+                      <Input
+                        value={editedContact.email}
+                        onChange={(e) => {
+                          const updatedContact = {
+                            ...editedContact,
+                            email: e.target.value,
+                          };
+                          setEditedContact(updatedContact);
+                        }}
+                        onBlur={() => {
                           saveContactDebounced(editedContact);
                           setEditingEmail(false);
-                        }
-                      }}
-                      className="text-sm text-muted-foreground !border-0 !outline-0 border-none px-0 py-1 bg-transparent focus:ring-0 focus:border-none focus:outline-none focus:shadow-none focus:bg-transparent shadow-none h-auto min-h-0 rounded-none focus:ring-offset-0 focus:!border-0 focus:!outline-0"
-                      placeholder="email@example.com"
-                      autoFocus
-                    />
-                  ) : (
-                    <div
-                      className="text-sm text-muted-foreground cursor-pointer px-0 py-1 rounded"
-                      onClick={() => setEditingEmail(true)}
-                    >
-                      {editedContact.email || "email@example.com"}
-                    </div>
-                  )}
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            saveContactDebounced(editedContact);
+                            setEditingEmail(false);
+                          }
+                        }}
+                        className="text-sm text-muted-foreground !border-0 !outline-0 border-none px-0 py-1 bg-transparent focus:ring-0 focus:border-none focus:outline-none focus:shadow-none focus:bg-transparent shadow-none h-auto min-h-0 rounded-none focus:ring-offset-0 focus:!border-0 focus:!outline-0"
+                        placeholder="email@example.com"
+                        autoFocus
+                      />
+                    ) : (
+                      <div
+                        className="text-sm text-muted-foreground cursor-pointer px-0 py-1 rounded truncate"
+                        onClick={() => setEditingEmail(true)}
+                      >
+                        {editedContact.email || "email@example.com"}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </SheetHeader>
 

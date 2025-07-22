@@ -11,6 +11,7 @@ interface Contact {
   lastEmailSubject?: string
   lastEmailPreview?: string
   lastMeetingName?: string
+  photoUrl?: string
 }
 
 async function fetchGmailContacts(auth: InstanceType<typeof google.auth.OAuth2>): Promise<Contact[]> {
@@ -232,6 +233,81 @@ async function fetchCalendarContacts(auth: InstanceType<typeof google.auth.OAuth
   return Array.from(calendarContacts.values())
 }
 
+async function fetchContactPhotos(auth: InstanceType<typeof google.auth.OAuth2>, contacts: Contact[]): Promise<Contact[]> {
+  console.log('🖼️ Fetching contact photos from People API...')
+  const people = google.people({ version: 'v1', auth })
+  const contactsWithPhotos = [...contacts]
+  
+  try {
+    // First, try to get contacts using the People API connections
+    try {
+      console.log('Fetching from People API connections...')
+      const connectionsResponse = await people.people.connections.list({
+        resourceName: 'people/me',
+        pageSize: 1000,
+        personFields: 'emailAddresses,photos,names'
+      })
+      
+      if (connectionsResponse.data.connections) {
+        console.log(`Found ${connectionsResponse.data.connections.length} connections from People API`)
+        
+        // Create a map of email -> photo URL for faster lookup
+        const photoMap = new Map<string, string>()
+        
+        connectionsResponse.data.connections.forEach(person => {
+          if (person.emailAddresses && person.photos) {
+            person.emailAddresses.forEach(email => {
+              if (email.value && person.photos && person.photos.length > 0) {
+                const photo = person.photos[0]
+                if (photo.url) {
+                  // Add size parameter to get a reasonable sized avatar
+                  const photoUrl = photo.url.includes('=') ? photo.url : `${photo.url}=s150-c`
+                  photoMap.set(email.value.toLowerCase(), photoUrl)
+                  console.log(`Found photo for ${email.value}: ${photoUrl.substring(0, 50)}...`)
+                }
+              }
+            })
+          }
+        })
+        
+        console.log(`Photo map has ${photoMap.size} entries`)
+        
+        // Apply photos to our contacts
+        let photosApplied = 0
+        contactsWithPhotos.forEach(contact => {
+          const photoUrl = photoMap.get(contact.email.toLowerCase())
+          if (photoUrl) {
+            contact.photoUrl = photoUrl
+            photosApplied++
+            console.log(`Applied photo to ${contact.email}`)
+          }
+        })
+        
+        console.log(`Applied ${photosApplied} photos from People API connections`)
+      }
+    } catch (error) {
+      console.log(`Error fetching People API connections: ${error}`)
+    }
+    
+    const photosFound = contactsWithPhotos.filter(c => c.photoUrl).length
+    console.log(`✅ Found ${photosFound} contact photos out of ${contactsWithPhotos.length} contacts`)
+    
+    // Log first few contacts with photos for debugging
+    const contactsWithPhotoUrls = contactsWithPhotos.filter(c => c.photoUrl).slice(0, 3)
+    if (contactsWithPhotoUrls.length > 0) {
+      console.log('Sample contacts with photos:', contactsWithPhotoUrls.map(c => ({ 
+        email: c.email, 
+        photoUrl: c.photoUrl?.substring(0, 50) + '...' 
+      })))
+    }
+    
+  } catch (error) {
+    console.error('Error fetching contact photos:', error)
+  }
+  
+  return contactsWithPhotos
+}
+
 async function fetchGoogleContacts(auth: InstanceType<typeof google.auth.OAuth2>) {
   console.log('🚀 Starting parallel fetch of Gmail and Calendar contacts...')
   
@@ -286,11 +362,15 @@ async function fetchGoogleContacts(auth: InstanceType<typeof google.auth.OAuth2>
   })
 
   // Convert map to array and filter out contacts without proper dates
-  const contacts = Array.from(contactsMap.values()).filter(contact => {
+  let contacts = Array.from(contactsMap.values()).filter(contact => {
     return contact.lastContact && contact.lastContact !== 'Unknown'
   })
 
   console.log(`✅ Processed ${contacts.length} unique contacts from Gmail and Calendar interactions`)
+  
+  // Fetch contact photos
+  contacts = await fetchContactPhotos(auth, contacts)
+  
   return contacts
 }
 

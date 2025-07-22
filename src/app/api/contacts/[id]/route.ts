@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-ignore
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, serverTimestamp, Timestamp, Firestore } from 'firebase/firestore'
 
@@ -12,54 +10,79 @@ interface ContactEdit {
   hidden?: boolean
   starred?: boolean
   tags?: string[]
+  photoUrl?: string
   updatedAt?: Timestamp | string
 }
 
-const EDITS_COLLECTION = 'contact-edits'
+async function saveEdit(edit: ContactEdit) {
+  if (!db) {
+    console.warn('Firebase not initialized, edit not saved:', edit.id)
+    return
+  }
 
-// Load existing edit from Firestore
+  try {
+    const docRef = doc(db as Firestore, 'contact-edits', edit.id)
+    const editToSave = {
+      ...edit,
+      updatedAt: serverTimestamp()
+    }
+    
+    await setDoc(docRef, editToSave, { merge: true })
+    console.log(`Successfully saved edit for ${edit.id}`)
+  } catch (error) {
+    console.error('Error saving edit:', error)
+    throw error
+  }
+}
+
 async function loadEdit(id: string): Promise<ContactEdit | null> {
   if (!db) {
-    console.warn('Firebase not initialized, cannot load edit')
+    console.warn('Firebase not initialized, no edit loaded for:', id)
     return null
   }
-  
+
   try {
-    const editRef = doc(db!, EDITS_COLLECTION, id)
-    const docSnap = await getDoc(editRef)
+    const docRef = doc(db as Firestore, 'contact-edits', id)
+    const docSnap = await getDoc(docRef)
     
     if (docSnap.exists()) {
-      const data = docSnap.data() as ContactEdit
+      const data = docSnap.data()
       return {
-        ...data,
-        id: docSnap.id,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt
+        id,
+        name: data.name,
+        email: data.email,
+        company: data.company,
+        hidden: data.hidden,
+        starred: data.starred,
+        tags: data.tags,
+        photoUrl: data.photoUrl,
+        updatedAt: data.updatedAt
       }
     }
+    
     return null
   } catch (error) {
-    console.error('Error loading edit from Firestore:', error)
+    console.error('Error loading edit:', error)
     return null
   }
 }
 
-// Save edit to Firestore
-async function saveEdit(edit: ContactEdit): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (!(db as any)) {
-    console.warn('Firebase not initialized, cannot save edit')
-    throw new Error('Firebase not configured')
-  }
-  
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
-    const editRef = doc(db as Firestore, EDITS_COLLECTION, edit.id)
-    await setDoc(editRef, {
-      ...edit,
-      updatedAt: serverTimestamp()
-    }, { merge: true })
+    const { id } = await context.params
+    const edit = await loadEdit(id)
+    
+    if (edit) {
+      return NextResponse.json(edit)
+    } else {
+      return NextResponse.json({ message: 'No edit found for this contact' }, { status: 404 })
+    }
   } catch (error) {
-    console.error('Error saving edit to Firestore:', error)
-    throw error
+    console.error('Error fetching contact edit:', error)
+    return NextResponse.json({ error: 'Failed to fetch contact edit' }, { status: 500 })
   }
 }
 
@@ -76,7 +99,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Contact ID is required' }, { status: 400 })
     }
 
-    // Create or update the edit
+    // Create or update the edit - filter out undefined values for Firebase
     const newEdit: ContactEdit = {
       id,
       name: body.name || '',
@@ -85,6 +108,11 @@ export async function PUT(
       hidden: body.hidden || false,
       starred: body.starred || false,
       tags: body.tags || []
+    }
+
+    // Only add photoUrl if it has a value (Firebase doesn't accept undefined)
+    if (body.photoUrl) {
+      newEdit.photoUrl = body.photoUrl
     }
 
     await saveEdit(newEdit)
@@ -99,20 +127,5 @@ export async function PUT(
       error: errorMessage,
       success: false 
     }, { status: 500 })
-  }
-}
-
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await context.params
-    const edit = await loadEdit(id)
-    
-    return NextResponse.json(edit)
-  } catch (error) {
-    console.error('Error fetching contact edit:', error)
-    return NextResponse.json({ error: 'Failed to fetch contact edit' }, { status: 500 })
   }
 } 
