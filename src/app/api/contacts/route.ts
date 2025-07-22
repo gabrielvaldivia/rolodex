@@ -163,7 +163,7 @@ async function fetchCalendarContacts(auth: InstanceType<typeof google.auth.OAuth
           if (event.attendees) {
             for (const attendee of event.attendees) {
               if (attendee.email) {
-                const name = attendee.displayName || attendee.email
+                const name = extractNameFromEmailOrDisplay(attendee.email, attendee.displayName || undefined)
                 
                 const contact: Contact = {
                   id: attendee.email,
@@ -184,7 +184,7 @@ async function fetchCalendarContacts(auth: InstanceType<typeof google.auth.OAuth
 
           // Process organizer
           if (event.organizer?.email) {
-            const name = event.organizer.displayName || event.organizer.email
+            const name = extractNameFromEmailOrDisplay(event.organizer.email, event.organizer.displayName || undefined)
             
             const contact: Contact = {
               id: event.organizer.email,
@@ -203,7 +203,7 @@ async function fetchCalendarContacts(auth: InstanceType<typeof google.auth.OAuth
 
           // Process creator
           if (event.creator?.email) {
-            const name = event.creator.displayName || event.creator.email
+            const name = extractNameFromEmailOrDisplay(event.creator.email, event.creator.displayName || undefined)
             
             const contact: Contact = {
               id: event.creator.email,
@@ -249,11 +249,39 @@ async function fetchGoogleContacts(auth: InstanceType<typeof google.auth.OAuth2>
     contactsMap.set(contact.email, contact)
   })
   
-  // Add Calendar contacts, updating if more recent
+  // Add Calendar contacts, intelligently merging names and keeping most recent data
   calendarContacts.forEach(contact => {
     const existing = contactsMap.get(contact.email)
-    if (!existing || new Date(contact.lastContact) > new Date(existing.lastContact)) {
+    if (!existing) {
+      // No existing contact, add the Calendar contact
       contactsMap.set(contact.email, contact)
+    } else {
+      // Merge contacts: keep most recent data but prefer Calendar name if it's better
+      const useCalendarName = 
+        // Use Calendar name if it's not just the email address
+        (contact.name !== contact.email && contact.name.length > 0) &&
+        // And Gmail name is just the email, very basic, or Calendar name is clearly better
+        (existing.name === existing.email || 
+         existing.name.length < contact.name.length ||
+         // Prefer names with spaces (full names) over single words
+         (contact.name.includes(' ') && !existing.name.includes(' ')))
+      
+      const mergedContact: Contact = {
+        ...existing,
+        // Keep most recent contact date
+        lastContact: new Date(contact.lastContact) > new Date(existing.lastContact) 
+          ? contact.lastContact 
+          : existing.lastContact,
+        // Use better name
+        name: useCalendarName ? contact.name : existing.name,
+        // Keep Calendar meeting info if Calendar contact is more recent
+        ...(new Date(contact.lastContact) > new Date(existing.lastContact) && {
+          lastMeetingName: contact.lastMeetingName,
+          source: contact.source
+        })
+      }
+      
+      contactsMap.set(contact.email, mergedContact)
     }
   })
 
@@ -274,6 +302,40 @@ function extractEmailFromHeader(header: string): string {
 function extractNameFromHeader(header: string): string {
   const match = header.match(/^(.+?)\s*</)
   return match ? match[1].trim().replace(/"/g, '') : ''
+}
+
+function extractNameFromEmailOrDisplay(email: string, displayName?: string): string {
+  // Use displayName if available and not just an email
+  if (displayName && displayName.trim() !== '' && !displayName.includes('@')) {
+    return displayName.trim().replace(/"/g, '')
+  }
+  
+  // Try to extract name from email address
+  const localPart = email.split('@')[0]
+  
+  // Check for common name patterns in email addresses
+  if (localPart.includes('.')) {
+    // Handle formats like firstname.lastname@domain.com
+    const parts = localPart.split('.')
+    return parts.map(part => 
+      part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+    ).join(' ')
+  } else if (localPart.includes('_')) {
+    // Handle formats like first_last@domain.com
+    const parts = localPart.split('_')
+    return parts.map(part => 
+      part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+    ).join(' ')
+  } else if (localPart.includes('-')) {
+    // Handle formats like first-last@domain.com
+    const parts = localPart.split('-')
+    return parts.map(part => 
+      part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+    ).join(' ')
+  } else {
+    // Just capitalize the first letter of the local part
+    return localPart.charAt(0).toUpperCase() + localPart.slice(1).toLowerCase()
+  }
 }
 
 function extractEmailsFromHeader(header: string): string[] {
