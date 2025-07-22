@@ -3085,25 +3085,28 @@ export default function Home() {
                   {selectedCompany.contacts.map((contact) => (
                     <div
                       key={contact.id}
-                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                      className="flex items-start justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
                       onClick={() => {
                         setSelectedCompany(null);
                         setIsCompanySheetOpen(false);
                         handleContactClick(contact);
                       }}
                     >
-                      <div className="flex-1 min-w-0">
-                        <div
-                          className="font-medium text-sm truncate"
-                          title={contact.name}
-                        >
-                          {contact.name}
-                        </div>
-                        <div
-                          className="text-xs text-muted-foreground truncate"
-                          title={contact.email}
-                        >
-                          {contact.email}
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <ContactAvatar contact={contact} size="sm" />
+                        <div className="flex-1 min-w-0">
+                          <div
+                            className="font-medium text-sm truncate"
+                            title={contact.name}
+                          >
+                            {contact.name}
+                          </div>
+                          <div
+                            className="text-xs text-muted-foreground truncate"
+                            title={contact.email}
+                          >
+                            {contact.email}
+                          </div>
                         </div>
                       </div>
                       <div className="text-xs text-muted-foreground">
