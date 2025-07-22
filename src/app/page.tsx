@@ -1703,6 +1703,17 @@ export default function Home() {
     }
   }, []);
 
+  // Load current view from localStorage
+  useEffect(() => {
+    const savedCurrentView = localStorage.getItem("rolodex-current-view");
+    if (
+      savedCurrentView &&
+      (savedCurrentView === "contacts" || savedCurrentView === "companies")
+    ) {
+      setCurrentView(savedCurrentView as View);
+    }
+  }, []);
+
   // Save custom tag colors to localStorage
   const saveCustomTagColors = (
     colors: Record<string, { bg: string; text: string; border: string }>
@@ -1715,6 +1726,12 @@ export default function Home() {
   const saveViewType = (newViewType: ViewType) => {
     setViewType(newViewType);
     localStorage.setItem("rolodex-view-type", newViewType);
+  };
+
+  // Save current view to localStorage
+  const saveCurrentView = (newView: View) => {
+    setCurrentView(newView);
+    localStorage.setItem("rolodex-current-view", newView);
   };
 
   // Load column order from localStorage
@@ -2142,7 +2159,7 @@ export default function Home() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48">
                 <DropdownMenuItem
-                  onClick={() => setCurrentView("contacts")}
+                  onClick={() => saveCurrentView("contacts")}
                   className={`cursor-pointer ${
                     currentView === "contacts" ? "bg-muted" : ""
                   }`}
@@ -2155,7 +2172,7 @@ export default function Home() {
                   </div>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => setCurrentView("companies")}
+                  onClick={() => saveCurrentView("companies")}
                   className={`cursor-pointer ${
                     currentView === "companies" ? "bg-muted" : ""
                   }`}
