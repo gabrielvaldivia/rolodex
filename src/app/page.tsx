@@ -613,6 +613,7 @@ interface KanbanBoardProps {
   customColors: Record<string, { bg: string; text: string; border: string }>;
   allTags: string[];
   columnOrder: string[];
+  selectedTags: string[];
   onContactClick: (contact: Contact) => void;
   onCompanyClick: (company: Company) => void;
   onColumnReorder: (newOrder: string[]) => void;
@@ -630,6 +631,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   customColors,
   allTags,
   columnOrder,
+  selectedTags,
   onContactClick,
   onCompanyClick,
   onColumnReorder,
@@ -662,10 +664,15 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
     }
   });
 
-  // Filter out empty tag groups (except "No Tags" which we always show if it has items)
-  const activeTagGroups = Object.entries(tagGroups).filter(
-    ([tag, items]) => items.length > 0 || tag === "No Tags"
-  );
+  // Filter out empty tag groups and respect selectedTags filter
+  const activeTagGroups = Object.entries(tagGroups).filter(([tag, items]) => {
+    // If no tags are selected, show all non-empty groups
+    if (selectedTags.length === 0) {
+      return items.length > 0;
+    }
+    // If tags are selected, only show selected tags that have items
+    return selectedTags.includes(tag) && items.length > 0;
+  });
 
   // Apply custom column order if available
   if (columnOrder.length > 0) {
@@ -2466,6 +2473,7 @@ export default function Home() {
                     customColors={customTagColors}
                     allTags={allTags}
                     columnOrder={columnOrder}
+                    selectedTags={selectedTags}
                     onContactClick={handleContactClick}
                     onCompanyClick={handleCompanyClick}
                     onColumnReorder={saveColumnOrder}
@@ -2478,6 +2486,7 @@ export default function Home() {
                     customColors={customTagColors}
                     allTags={allTags}
                     columnOrder={columnOrder}
+                    selectedTags={selectedTags}
                     onContactClick={handleContactClick}
                     onCompanyClick={handleCompanyClick}
                     onColumnReorder={saveColumnOrder}
