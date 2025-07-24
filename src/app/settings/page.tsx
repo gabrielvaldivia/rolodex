@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
@@ -47,7 +47,13 @@ export default function Settings() {
     localStorage.setItem("rolodex-auto-sync", enabled.toString());
   };
 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+
   const handleManualSync = async () => {
+    setIsSyncing(true);
+    setSyncStatus("Syncing contacts...");
+
     try {
       // Check if we have a valid session with access token
       const sessionWithToken = session as {
@@ -58,7 +64,8 @@ export default function Settings() {
         console.error("No access token in session:", sessionWithToken);
         if (sessionWithToken?.error === "RefreshAccessTokenError") {
           console.error("Token refresh failed, signing out...");
-          router.push("/");
+          setSyncStatus("Authentication failed - please sign in again");
+          setIsSyncing(false);
           return;
         }
         throw new Error("Authentication required");
@@ -81,13 +88,21 @@ export default function Settings() {
         setLastAutoSync(now);
         localStorage.setItem("rolodex-last-sync", now);
 
-        // Redirect back to contacts
-        router.push("/");
+        setSyncStatus(`✅ Successfully synced ${data.length} contacts`);
+
+        // Clear status after 3 seconds
+        setTimeout(() => setSyncStatus(null), 3000);
       } else {
         console.error("Failed to sync contacts:", response.status);
+        setSyncStatus("❌ Sync failed - please try again");
+        setTimeout(() => setSyncStatus(null), 3000);
       }
     } catch (error) {
       console.error("Error syncing contacts:", error);
+      setSyncStatus("❌ Sync failed - please try again");
+      setTimeout(() => setSyncStatus(null), 3000);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -145,8 +160,21 @@ export default function Settings() {
                 />
               </div>
               <div className="pt-2 flex items-center gap-3">
-                <Button onClick={handleManualSync} variant="outline" size="sm">
-                  Sync Now
+                <Button
+                  onClick={handleManualSync}
+                  variant="outline"
+                  size="sm"
+                  disabled={isSyncing}
+                  className="relative"
+                >
+                  {isSyncing ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                      Syncing...
+                    </>
+                  ) : (
+                    "Sync Now"
+                  )}
                 </Button>
                 {lastAutoSync && (
                   <div className="text-xs text-muted-foreground">
@@ -154,6 +182,13 @@ export default function Settings() {
                   </div>
                 )}
               </div>
+              {syncStatus && (
+                <div className="pt-2">
+                  <div className="text-sm text-muted-foreground">
+                    {syncStatus}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 

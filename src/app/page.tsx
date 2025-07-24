@@ -2129,14 +2129,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen py-8">
-      {backgroundSyncing && (
-        <div className="fixed top-4 right-4 z-50 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm text-blue-800 shadow-sm">
-          <div className="flex items-center gap-2">
-            <RefreshCw className="h-3 w-3 animate-spin" />
-            <span>Updating contacts in background...</span>
-          </div>
-        </div>
-      )}
       <div className="">
         <div className="flex items-center justify-between mb-8 px-8">
           <div className="flex items-center gap-4">
@@ -2430,18 +2422,14 @@ export default function Home() {
               </DropdownMenuContent>
             </DropdownMenu>
             <Button
-              onClick={() => fetchContacts()}
+              onClick={() => fetchContacts(true)}
               variant="outline"
               size="sm"
               disabled={loading || backgroundSyncing}
-              className="relative"
             >
               <RefreshCw
                 className={`h-4 w-4 ${backgroundSyncing ? "animate-spin" : ""}`}
               />
-              {backgroundSyncing && (
-                <span className="absolute -top-1 -right-1 h-2 w-2 bg-blue-500 rounded-full animate-pulse"></span>
-              )}
             </Button>
             <Button
               onClick={() => router.push("/settings")}
