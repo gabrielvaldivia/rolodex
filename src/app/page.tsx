@@ -2196,7 +2196,7 @@ export default function Home() {
                 }
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-8 pr-8"
+                className="h-8 pr-8 text-sm md:text-base"
               />
               {searchTerm && (
                 <Button
