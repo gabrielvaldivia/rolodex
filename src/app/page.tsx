@@ -2130,7 +2130,7 @@ export default function Home() {
   return (
     <div className="min-h-screen py-8">
       <div className="">
-        <div className="flex items-center justify-between mb-8 px-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8 px-8">
           <div className="flex items-center gap-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -2186,7 +2186,29 @@ export default function Home() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-0">
+              <Input
+                placeholder={
+                  currentView === "contacts"
+                    ? "Search contacts..."
+                    : "Search companies..."
+                }
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-8 pr-8"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-8 w-8 p-0 hover:bg-transparent"
+                  onClick={() => setSearchTerm("")}
+                >
+                  <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                </Button>
+              )}
+            </div>
             {/* View Type Toggle */}
             <div className="flex items-center gap-0.5 bg-muted p-0.5 rounded-lg h-8">
               <button
@@ -2211,28 +2233,6 @@ export default function Home() {
               >
                 <LayoutGrid className="h-3 w-3" />
               </button>
-            </div>
-            <div className="relative max-w-sm">
-              <Input
-                placeholder={
-                  currentView === "contacts"
-                    ? "Search contacts..."
-                    : "Search companies..."
-                }
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-8 pr-8"
-              />
-              {searchTerm && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-8 w-8 p-0 hover:bg-transparent"
-                  onClick={() => setSearchTerm("")}
-                >
-                  <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                </Button>
-              )}
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
