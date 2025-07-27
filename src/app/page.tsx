@@ -2389,16 +2389,6 @@ export default function Home() {
           </div>
         ) : (
           <div className="w-full">
-            {backgroundSyncing && (
-              <div className="fixed top-4 right-4 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 shadow-sm z-50">
-                <div className="flex items-center space-x-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                  <span className="text-sm text-blue-700">
-                    Updating contacts...
-                  </span>
-                </div>
-              </div>
-            )}
             {viewType === "kanban" ? (
               <div className="overflow-x-auto pl-8">
                 {currentView === "contacts" ? (

@@ -70,6 +70,16 @@ export async function fetchGmailContacts(auth: InstanceType<typeof google.auth.O
   const gmail = google.gmail({ version: 'v1', auth })
   const gmailContacts = new Map<string, Contact>()
 
+  // Get the user's email address
+  let userEmail = ''
+  try {
+    const profile = await gmail.users.getProfile({ userId: 'me' })
+    userEmail = profile.data.emailAddress || ''
+    console.log(`User email: ${userEmail}`)
+  } catch (error) {
+    console.error('Error getting user profile:', error)
+  }
+
   try {
     // Get recent emails for comprehensive contact discovery
     const emailResponse = await gmail.users.messages.list({
@@ -81,6 +91,9 @@ export async function fetchGmailContacts(auth: InstanceType<typeof google.auth.O
     if (emailResponse.data.messages) {
       console.log(`Found ${emailResponse.data.messages.length} emails, processing...`)
       const messagesToProcess = emailResponse.data.messages
+      
+      // Track email threads to prioritize received emails
+      const emailThreads = new Map<string, { received: Contact | null; sent: Contact | null }>()
       
       for (let i = 0; i < messagesToProcess.length; i++) {
         const message = messagesToProcess[i]
@@ -107,69 +120,78 @@ export async function fetchGmailContacts(auth: InstanceType<typeof google.auth.O
           
           // Extract email body content
           const emailBody = extractEmailBody(messageDetail.data.payload)
-
-          if (fromHeader?.value) {
-            const email = extractEmailFromHeader(fromHeader.value)
-            const name = extractNameFromHeader(fromHeader.value)
-            const dateString = dateHeader?.value || new Date().toISOString()
+          const subject = subjectHeader?.value || ''
+          const dateString = dateHeader?.value || new Date().toISOString()
+          
+          try {
+            const parsedDate = new Date(dateString)
+            if (isNaN(parsedDate.getTime())) continue
             
-            try {
-              const parsedDate = new Date(dateString)
-              if (!isNaN(parsedDate.getTime())) {
-                const subject = subjectHeader?.value || ''
-                const preview = emailBody ? emailBody.replace(/\s+/g, ' ').trim() : ''
-                
+            const preview = emailBody ? emailBody.replace(/\s+/g, ' ').trim() : ''
+            
+            // Process From header (received emails)
+            if (fromHeader?.value) {
+              const fromEmail = extractEmailFromHeader(fromHeader.value)
+              const fromName = extractNameFromHeader(fromHeader.value)
+              
+              // Skip if this is the user's own email
+              if (fromEmail !== userEmail) {
                 const contact: Contact = {
-                  id: email,
-                  name: name || email,
-                  email: email,
-                  company: extractCompanyFromEmail(email),
+                  id: fromEmail,
+                  name: fromName || fromEmail,
+                  email: fromEmail,
+                  company: extractCompanyFromEmail(fromEmail),
                   lastContact: parsedDate.toISOString(),
                   source: 'Gmail',
                   lastEmailSubject: subject,
                   lastEmailPreview: preview
                 }
                 
-                if (!gmailContacts.has(email) || new Date(contact.lastContact) > new Date(gmailContacts.get(email)!.lastContact)) {
-                  gmailContacts.set(email, contact)
+                // Track this as a received email in the thread
+                const threadKey = `${fromEmail}-${subject}`
+                const thread = emailThreads.get(threadKey) || { received: null, sent: null }
+                if (!thread.received || new Date(contact.lastContact) > new Date(thread.received.lastContact)) {
+                  thread.received = contact
                 }
+                emailThreads.set(threadKey, thread)
               }
-            } catch (dateError) {
-              console.log(`Date parsing error for ${email}: ${dateError}`)
             }
-          }
-
-          if (toHeader?.value) {
-            const emails = extractEmailsFromHeader(toHeader.value)
-            for (const email of emails) {
-              const name = extractNameFromHeader(toHeader.value)
-              const dateString = dateHeader?.value || new Date().toISOString()
+            
+            // Process To header (sent emails)
+            if (toHeader?.value) {
+              const toEmails = extractEmailsFromHeader(toHeader.value)
+              const fromEmail = fromHeader?.value ? extractEmailFromHeader(fromHeader.value) : ''
               
-              try {
-                const parsedDate = new Date(dateString)
-                if (!isNaN(parsedDate.getTime())) {
-                  const subject = subjectHeader?.value || ''
-                  const preview = emailBody ? emailBody.replace(/\s+/g, ' ').trim() : ''
-                  
-                  const contact: Contact = {
-                    id: email,
-                    name: name || email,
-                    email: email,
-                    company: extractCompanyFromEmail(email),
-                    lastContact: parsedDate.toISOString(),
-                    source: 'Gmail',
-                    lastEmailSubject: subject,
-                    lastEmailPreview: preview
-                  }
-                  
-                  if (!gmailContacts.has(email) || new Date(contact.lastContact) > new Date(gmailContacts.get(email)!.lastContact)) {
-                    gmailContacts.set(email, contact)
+              // Only process if this is actually sent by the user
+              if (fromEmail === userEmail) {
+                for (const toEmail of toEmails) {
+                  if (toEmail !== userEmail) {
+                    const toName = extractNameFromHeader(toHeader.value)
+                    
+                    const contact: Contact = {
+                      id: toEmail,
+                      name: toName || toEmail,
+                      email: toEmail,
+                      company: extractCompanyFromEmail(toEmail),
+                      lastContact: parsedDate.toISOString(),
+                      source: 'Gmail',
+                      lastEmailSubject: subject,
+                      lastEmailPreview: preview
+                    }
+                    
+                    // Track this as a sent email in the thread
+                    const threadKey = `${toEmail}-${subject}`
+                    const thread = emailThreads.get(threadKey) || { received: null, sent: null }
+                    if (!thread.sent || new Date(contact.lastContact) > new Date(thread.sent.lastContact)) {
+                      thread.sent = contact
+                    }
+                    emailThreads.set(threadKey, thread)
                   }
                 }
-              } catch (dateError) {
-                console.log(`Date parsing error for ${email}: ${dateError}`)
               }
             }
+          } catch (dateError) {
+            console.log(`Date parsing error: ${dateError}`)
           }
         } catch (error: unknown) {
           if (error && typeof error === 'object' && 'code' in error && error.code === 403) {
@@ -178,6 +200,40 @@ export async function fetchGmailContacts(auth: InstanceType<typeof google.auth.O
             continue
           }
           console.error('Error processing email:', error)
+        }
+      }
+      
+      // Now process the threads to create final contacts
+      for (const [threadKey, thread] of emailThreads) {
+        const email = threadKey.split('-')[0] // Extract email from thread key
+        
+        // Prioritize received emails over sent emails for the same thread
+        let finalContact: Contact | null = null
+        
+        if (thread.received && thread.sent) {
+          // Both received and sent emails exist for this thread
+          if (new Date(thread.received.lastContact) >= new Date(thread.sent.lastContact)) {
+            // Use received email if it's more recent or same date
+            finalContact = thread.received
+          } else {
+            // Use sent email if it's more recent, but keep received email data if available
+            finalContact = {
+              ...thread.sent,
+              lastEmailSubject: thread.received.lastEmailSubject,
+              lastEmailPreview: thread.received.lastEmailPreview
+            }
+          }
+        } else if (thread.received) {
+          finalContact = thread.received
+        } else if (thread.sent) {
+          finalContact = thread.sent
+        }
+        
+        if (finalContact) {
+          const existingContact = gmailContacts.get(email)
+          if (!existingContact || new Date(finalContact.lastContact) > new Date(existingContact.lastContact)) {
+            gmailContacts.set(email, finalContact)
+          }
         }
       }
     }
