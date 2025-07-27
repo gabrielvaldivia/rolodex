@@ -66,7 +66,7 @@ function extractEmailBody(payload: any): string {
 }
 
 export async function fetchGmailContacts(auth: InstanceType<typeof google.auth.OAuth2>): Promise<Contact[]> {
-  console.log('Fetching Gmail emails...')
+
   const gmail = google.gmail({ version: 'v1', auth })
   const gmailContacts = new Map<string, Contact>()
 
@@ -89,7 +89,7 @@ export async function fetchGmailContacts(auth: InstanceType<typeof google.auth.O
     })
 
     if (emailResponse.data.messages) {
-      console.log(`Found ${emailResponse.data.messages.length} emails, processing...`)
+
       const messagesToProcess = emailResponse.data.messages
       
       // Track email threads to prioritize received emails
@@ -418,11 +418,14 @@ export async function fetchContactPhotos(auth: InstanceType<typeof google.auth.O
 export async function fetchGoogleContacts(auth: InstanceType<typeof google.auth.OAuth2>) {
   console.log('🚀 Starting parallel fetch of Gmail and Calendar contacts...')
   
-  // Fetch Gmail and Calendar contacts in parallel
-  const [gmailContacts, calendarContacts] = await Promise.all([
-    fetchGmailContacts(auth),
-    fetchCalendarContacts(auth)
-  ])
+  try {
+    // Fetch Gmail and Calendar contacts in parallel
+    const [gmailContacts, calendarContacts] = await Promise.all([
+      fetchGmailContacts(auth),
+      fetchCalendarContacts(auth)
+    ])
+
+    
 
   // Merge contacts, prioritizing the most recent interaction for each email
   const contactsMap = new Map<string, Contact>()
@@ -479,4 +482,8 @@ export async function fetchGoogleContacts(auth: InstanceType<typeof google.auth.
   contacts = await fetchContactPhotos(auth, contacts)
   
   return contacts
+  } catch (error) {
+    console.error('❌ Error in fetchGoogleContacts:', error)
+    return []
+  }
 } 

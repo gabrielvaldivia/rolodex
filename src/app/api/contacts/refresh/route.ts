@@ -67,7 +67,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ 
       success: true, 
       message: `Refreshed ${contacts.length} contacts`,
-      contactsCount: contacts.length 
+      contactsCount: contacts.length,
+      contacts: contacts
     })
   } catch (error: unknown) {
     console.error('Background refresh error:', error)

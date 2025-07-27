@@ -106,11 +106,19 @@ export async function GET(request: NextRequest) {
     const token = authHeader.replace('Bearer ', '')
     const userId = getUserCacheKey(token)
     
-    // Check for cached contacts first
-    const cachedContacts = await getCachedContacts(userId)
-    if (cachedContacts) {
-      console.log('Returning cached contacts immediately')
-      return NextResponse.json(cachedContacts)
+    // Check if force refresh is requested
+    const { searchParams } = new URL(request.url)
+    const forceRefresh = searchParams.get('refresh') === 'true'
+    
+    // Check for cached contacts first (unless force refresh is requested)
+    if (!forceRefresh) {
+      const cachedContacts = await getCachedContacts(userId)
+      if (cachedContacts) {
+        console.log('Returning cached contacts immediately')
+        return NextResponse.json(cachedContacts)
+      }
+    } else {
+      console.log('Force refresh requested, bypassing cache')
     }
     
     // No valid cache, fetch fresh data

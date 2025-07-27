@@ -1761,7 +1761,7 @@ export default function Home() {
   const loadContacts = async () => {
     // Backend caching is now handled automatically by the API
     // The API will return cached data immediately if available
-    console.log("Loading contacts from backend (with automatic caching)");
+    console.log("🔄 Loading contacts from backend (with automatic caching)");
     fetchContacts();
   };
 
@@ -1779,16 +1779,21 @@ export default function Home() {
       };
 
       if (!sessionWithToken?.accessToken) {
-        console.error("No access token in session:", sessionWithToken);
+        console.error("❌ No access token in session:", sessionWithToken);
         if (sessionWithToken?.error === "RefreshAccessTokenError") {
-          console.error("Token refresh failed, signing out...");
+          console.error("❌ Token refresh failed, signing out...");
           signOut();
           return;
         }
         throw new Error("Authentication required");
       }
 
-      const response = await fetch("/api/contacts", {
+      // Use refresh endpoint to force fresh data
+      const endpoint = "/api/contacts/refresh";
+      const method = "POST";
+
+      const response = await fetch(endpoint, {
+        method,
         headers: {
           Authorization: `Bearer ${sessionWithToken.accessToken}`,
         },
@@ -1800,7 +1805,16 @@ export default function Home() {
           console.error(
             "Authentication failed. Please sign in again to get updated permissions for contact photos."
           );
-          // Force sign out to refresh the session with new scopes
+
+          // For background sync, don't force sign out - just log the error
+          if (background) {
+            console.log(
+              "Background sync failed due to authentication error - will retry later"
+            );
+            return;
+          }
+
+          // For initial load, force sign out to refresh the session with new scopes
           alert(
             "Please sign out and sign in again to enable contact photo fetching with updated permissions."
           );
@@ -1811,10 +1825,14 @@ export default function Home() {
       }
 
       const data = await response.json();
-      console.log("Raw contacts from API:", data.slice(0, 3)); // Debug: check if photos are in API response
+
+      // Handle different response formats
+      // The refresh endpoint returns {success, message, contactsCount, contacts}
+      // The regular endpoint returns the contacts array directly
+      const contacts = data.contacts || data;
 
       // Apply any existing edits to the contacts
-      const contactsWithEdits = await applyEditsToContacts(data);
+      const contactsWithEdits = await applyEditsToContacts(contacts);
       console.log(
         "Contacts with edits applied:",
         contactsWithEdits.slice(0, 3)
@@ -1830,9 +1848,20 @@ export default function Home() {
       setContacts(contactsWithEdits);
 
       // Backend caching is now handled automatically by the API
-      console.log(`Received ${data.length} contacts from backend`);
     } catch (error) {
       console.error("Error fetching contacts:", error);
+
+      // Check if it's an authentication error
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      if (
+        errorMessage.includes("Gmail API error") ||
+        errorMessage.includes("401")
+      ) {
+        alert(
+          "Your Google account needs to be re-authenticated to access Gmail and Calendar data. Please sign out and sign in again."
+        );
+      }
     } finally {
       if (background) {
         setBackgroundSyncing(false);
@@ -2359,10 +2388,15 @@ export default function Home() {
               </DropdownMenuContent>
             </DropdownMenu>
             <Button
-              onClick={() => fetchContacts(true)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                fetchContacts(true);
+              }}
               variant="outline"
               size="sm"
               disabled={loading || backgroundSyncing}
+              type="button"
             >
               <RefreshCw
                 className={`h-4 w-4 ${backgroundSyncing ? "animate-spin" : ""}`}
