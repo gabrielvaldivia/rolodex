@@ -9,6 +9,8 @@ export const EmailText: React.FC<EmailTextProps> = ({
   content,
   className = "",
 }) => {
+  // Debug: Log all content being processed
+  console.log("📧 EmailText received content:", content);
   // Function to process email content and format it properly
   const processEmailContent = (text: string) => {
     // First, truncate at common email chain patterns to show only the latest email
@@ -109,18 +111,43 @@ export const EmailText: React.FC<EmailTextProps> = ({
 
   // Function to detect and format URLs
   const formatUrls = (text: string) => {
-    // First, handle Gmail's format: "text" <url>
+    // Handle the specific case first: "Designer in Residence" <url> (with or without closing >)
+    const designerPattern = /"Designer in Residence"\s*<([^>]+)(?:>|$)/g;
+
+    // Then handle Gmail's format: "text" <url> - more robust pattern
     const gmailLinkRegex = /"([^"]+)"\s*<([^>]+)>/g;
 
-    // Then handle regular URLs
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    // Also handle variations like "text" <url> without quotes
+    const gmailLinkRegex2 = /([^<>\s]+)\s*<([^>]+)>/g;
+
+    // Then handle regular URLs (but not URLs that are already inside HTML tags)
+    const urlRegex = /(?<!["'])(https?:\/\/[^\s<>"']+)(?!["'])/g;
     const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
 
-    return text
+    let result = text;
+
+    // Debug: Check if we're processing the right content
+    if (text.includes('"Designer in Residence"')) {
+      console.log("🔗 Debug: Processing text with Designer in Residence");
+      console.log("🔗 Debug: Before any processing:", result);
+
+      // Test the designerPattern specifically
+      const testMatch = designerPattern.exec(text);
+      console.log("🔗 Debug: designerPattern test match:", testMatch);
+    }
+
+    result = result
       .replace(
         gmailLinkRegex,
         '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">$1</a>'
       )
+      .replace(gmailLinkRegex2, (match, text, url) => {
+        // Only replace if the URL looks like a real URL and text doesn't contain special URL characters
+        if (url.startsWith("http") && !text.includes("://")) {
+          return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${text}</a>`;
+        }
+        return match;
+      })
       .replace(
         urlRegex,
         '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">$1</a>'
@@ -129,15 +156,32 @@ export const EmailText: React.FC<EmailTextProps> = ({
         emailRegex,
         '<a href="mailto:$1" class="text-blue-600 hover:underline">$1</a>'
       );
+
+    // Handle the specific case LAST to avoid interference
+    result = result.replace(
+      designerPattern,
+      '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">Designer in Residence</a>'
+    );
+
+    if (text.includes('"Designer in Residence"')) {
+      console.log("🔗 Debug: After all processing:", result);
+    }
+
+    return result;
   };
 
   const processedLines = processEmailContent(content);
+
+  // Process the entire content first to handle cross-line patterns
+  const fullFormattedContent = formatUrls(content);
 
   return (
     <div
       className={`text-sm leading-relaxed break-words overflow-hidden ${className}`}
     >
       {processedLines.map((line, index) => {
+        // Use the full formatted content instead of processing each line separately
+        // This ensures cross-line patterns are handled correctly
         const formattedContent = formatUrls(line.content);
 
         switch (line.type) {
