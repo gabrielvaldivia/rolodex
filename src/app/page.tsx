@@ -1756,68 +1756,12 @@ export default function Home() {
   };
 
   // Auto-sync functionality moved to settings page
-  useEffect(() => {
-    if (!session) return;
-
-    const autoSyncEnabled = localStorage.getItem("rolodex-auto-sync");
-    if (autoSyncEnabled === "false") return;
-
-    const checkAndSync = () => {
-      const cachedTime = localStorage.getItem("rolodex-contacts-time");
-      if (cachedTime) {
-        const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000; // 6 hours ago
-        if (parseInt(cachedTime) <= sixHoursAgo) {
-          console.log(
-            "Auto-sync: Cache expired, fetching new contacts in background"
-          );
-          fetchContacts(true); // Background sync
-        }
-      }
-    };
-
-    // Check immediately
-    checkAndSync();
-
-    // Set up interval to check every 5 minutes for expired cache
-    const interval = setInterval(checkAndSync, 5 * 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, [session]);
+  // Backend caching now handles this automatically
 
   const loadContacts = async () => {
-    // Check if we have cached contacts (less than 6 hours old)
-    const cachedContacts = localStorage.getItem("rolodex-contacts");
-    const cachedTime = localStorage.getItem("rolodex-contacts-time");
-
-    console.log(
-      "Loading contacts - cache available:",
-      cachedContacts ? "Yes" : "No"
-    );
-    console.log("Cache time:", cachedTime);
-
-    if (cachedContacts && cachedTime) {
-      const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000; // 6 hours ago
-      const cacheAge = Date.now() - parseInt(cachedTime);
-      console.log(`Cache age: ${Math.round(cacheAge / (1000 * 60))} minutes`);
-
-      if (parseInt(cachedTime) > sixHoursAgo) {
-        console.log("Loading contacts from cache");
-        const baseContacts = JSON.parse(cachedContacts);
-        console.log(`Found ${baseContacts.length} cached contacts`);
-        const contactsWithEdits = await applyEditsToContacts(baseContacts);
-        setContacts(contactsWithEdits);
-        console.log(
-          `Set ${contactsWithEdits.length} contacts (with edits applied)`
-        );
-        return;
-      } else {
-        console.log("Cache is older than 6 hours, fetching fresh contacts");
-      }
-    } else {
-      console.log("No cache found, fetching fresh contacts");
-    }
-
-    // If no cache or cache is old, fetch new contacts
+    // Backend caching is now handled automatically by the API
+    // The API will return cached data immediately if available
+    console.log("Loading contacts from backend (with automatic caching)");
     fetchContacts();
   };
 
@@ -1885,11 +1829,8 @@ export default function Home() {
 
       setContacts(contactsWithEdits);
 
-      // Cache the contacts for 6 hours
-      localStorage.setItem("rolodex-contacts", JSON.stringify(data));
-      localStorage.setItem("rolodex-contacts-time", Date.now().toString());
-
-      console.log(`Cached ${data.length} contacts`);
+      // Backend caching is now handled automatically by the API
+      console.log(`Received ${data.length} contacts from backend`);
     } catch (error) {
       console.error("Error fetching contacts:", error);
     } finally {
@@ -2452,6 +2393,16 @@ export default function Home() {
           </div>
         ) : (
           <div className="w-full">
+            {backgroundSyncing && (
+              <div className="fixed top-4 right-4 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 shadow-sm z-50">
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <span className="text-sm text-blue-700">
+                    Updating contacts...
+                  </span>
+                </div>
+              </div>
+            )}
             {viewType === "kanban" ? (
               <div className="overflow-x-auto pl-8">
                 {currentView === "contacts" ? (

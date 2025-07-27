@@ -1,485 +1,100 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
+import { db } from '@/lib/firebase'
+import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore'
+import { Contact, fetchGoogleContacts } from '@/lib/contacts'
 
-interface Contact {
-  id: string
-  name: string
-  email: string
-  company?: string
-  lastContact: string
-  source: string
-  lastEmailSubject?: string
-  lastEmailPreview?: string
-  lastMeetingName?: string
-  photoUrl?: string
+interface CachedContacts {
+  contacts: Contact[]
+  cachedAt: Timestamp
+  userId: string
 }
 
-async function fetchGmailContacts(auth: InstanceType<typeof google.auth.OAuth2>): Promise<Contact[]> {
-  console.log('Fetching Gmail emails...')
-  const gmail = google.gmail({ version: 'v1', auth })
-  const gmailContacts = new Map<string, Contact>()
+// Helper function to get user ID from email (since we don't have user ID in session)
+function getUserCacheKey(token: string): string {
+  // Use a hash of the token as the cache key
+  return `user_${token.substring(0, 20)}`
+}
+
+// Check if cache is still valid (24 hours)
+function isCacheValid(cachedAt: Timestamp): boolean {
+  const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000
+  return cachedAt.toMillis() > twentyFourHoursAgo
+}
+
+// Get cached contacts from Firestore
+async function getCachedContacts(userId: string): Promise<Contact[] | null> {
+  if (!db) {
+    console.warn('Firebase not initialized, skipping cache')
+    return null
+  }
 
   try {
-    // Get recent emails for comprehensive contact discovery
-    const emailResponse = await gmail.users.messages.list({
-      userId: 'me',
-      maxResults: 2500, // Increased to match Calendar events for better coverage
-      q: 'in:sent OR in:inbox', // Get both sent and received emails
-    })
-
-    if (emailResponse.data.messages) {
-      console.log(`Found ${emailResponse.data.messages.length} emails, processing...`)
-      const messagesToProcess = emailResponse.data.messages
+    const cacheDoc = doc(db, 'contact-cache', userId)
+    const cacheSnapshot = await getDoc(cacheDoc)
+    
+    if (cacheSnapshot.exists()) {
+      const cacheData = cacheSnapshot.data() as CachedContacts
       
-      for (let i = 0; i < messagesToProcess.length; i++) {
-        const message = messagesToProcess[i]
-        try {
-          if (!message.id) continue
-          
-          // Optimized rate limiting for better performance
-          if (i > 0 && i % 10 === 0) {
-            console.log(`Processing email ${i + 1}/${messagesToProcess.length}, pausing...`)
-            await new Promise(resolve => setTimeout(resolve, 500)) // Shorter pause, less frequent
-          }
-          
-          const messageDetail = await gmail.users.messages.get({
-            userId: 'me',
-            id: message.id,
-            format: 'full'
-          })
-
-          const headers = messageDetail.data.payload?.headers || []
-          const fromHeader = headers.find(h => h.name === 'From')
-          const toHeader = headers.find(h => h.name === 'To')
-          const dateHeader = headers.find(h => h.name === 'Date')
-          const subjectHeader = headers.find(h => h.name === 'Subject')
-          
-          // Extract email body content
-          const emailBody = extractEmailBody(messageDetail.data.payload)
-
-          if (fromHeader?.value) {
-            const email = extractEmailFromHeader(fromHeader.value)
-            const name = extractNameFromHeader(fromHeader.value)
-            const dateString = dateHeader?.value || new Date().toISOString()
-            
-            try {
-              const parsedDate = new Date(dateString)
-              if (!isNaN(parsedDate.getTime())) {
-                const subject = subjectHeader?.value || ''
-                const preview = emailBody ? emailBody.replace(/\s+/g, ' ').trim() : ''
-                
-                const contact: Contact = {
-                  id: email,
-                  name: name || email,
-                  email: email,
-                  company: extractCompanyFromEmail(email),
-                  lastContact: parsedDate.toISOString(),
-                  source: 'Gmail',
-                  lastEmailSubject: subject,
-                  lastEmailPreview: preview
-                }
-                
-                if (!gmailContacts.has(email) || new Date(contact.lastContact) > new Date(gmailContacts.get(email)!.lastContact)) {
-                  gmailContacts.set(email, contact)
-                }
-              }
-            } catch (dateError) {
-              console.log(`Date parsing error for ${email}: ${dateError}`)
-            }
-          }
-
-          if (toHeader?.value) {
-            const emails = extractEmailsFromHeader(toHeader.value)
-            for (const email of emails) {
-              const name = extractNameFromHeader(toHeader.value)
-              const dateString = dateHeader?.value || new Date().toISOString()
-              
-              try {
-                const parsedDate = new Date(dateString)
-                if (!isNaN(parsedDate.getTime())) {
-                  const subject = subjectHeader?.value || ''
-                  const preview = emailBody ? emailBody.replace(/\s+/g, ' ').trim() : ''
-                  
-                  const contact: Contact = {
-                    id: email,
-                    name: name || email,
-                    email: email,
-                    company: extractCompanyFromEmail(email),
-                    lastContact: parsedDate.toISOString(),
-                    source: 'Gmail',
-                    lastEmailSubject: subject,
-                    lastEmailPreview: preview
-                  }
-                  
-                  if (!gmailContacts.has(email) || new Date(contact.lastContact) > new Date(gmailContacts.get(email)!.lastContact)) {
-                    gmailContacts.set(email, contact)
-                  }
-                }
-              } catch (dateError) {
-                console.log(`Date parsing error for ${email}: ${dateError}`)
-              }
-            }
-          }
-        } catch (error: unknown) {
-          if (error && typeof error === 'object' && 'code' in error && error.code === 403) {
-            console.log(`Rate limit hit at email ${i + 1}, waiting 5 seconds...`)
-            await new Promise(resolve => setTimeout(resolve, 5000))
-            continue
-          }
-          console.error('Error processing email:', error)
-        }
+      if (isCacheValid(cacheData.cachedAt)) {
+        console.log(`✅ Returning ${cacheData.contacts.length} cached contacts`)
+        return cacheData.contacts
+      } else {
+        console.log('Cache expired, will fetch fresh data')
       }
-    }
-  } catch (error) {
-    console.error('Error fetching Gmail contacts:', error)
-  }
-
-  console.log(`✅ Found ${gmailContacts.size} contacts from Gmail`)
-  return Array.from(gmailContacts.values())
-}
-
-async function fetchCalendarContacts(auth: InstanceType<typeof google.auth.OAuth2>): Promise<Contact[]> {
-  console.log('Fetching Calendar events...')
-  const calendar = google.calendar({ version: 'v3', auth })
-  const calendarContacts = new Map<string, Contact>()
-
-  try {
-    const calendarResponse = await calendar.events.list({
-      calendarId: 'primary',
-      maxResults: 2500,
-      singleEvents: true,
-      orderBy: 'startTime',
-    })
-
-    if (calendarResponse.data.items) {
-      for (const event of calendarResponse.data.items) {
-        const eventDate = event.start?.dateTime || event.start?.date
-        if (!eventDate) continue
-
-        try {
-          const parsedDate = new Date(eventDate)
-          if (isNaN(parsedDate.getTime())) continue
-
-          // Process attendees
-          if (event.attendees) {
-            for (const attendee of event.attendees) {
-              if (attendee.email) {
-                const name = extractNameFromEmailOrDisplay(attendee.email, attendee.displayName || undefined)
-                
-                const contact: Contact = {
-                  id: attendee.email,
-                  name: name,
-                  email: attendee.email,
-                  company: extractCompanyFromEmail(attendee.email),
-                  lastContact: parsedDate.toISOString(),
-                  source: 'Calendar',
-                  lastMeetingName: event.summary || 'Meeting'
-                }
-                
-                if (!calendarContacts.has(attendee.email) || new Date(contact.lastContact) > new Date(calendarContacts.get(attendee.email)!.lastContact)) {
-                  calendarContacts.set(attendee.email, contact)
-                }
-              }
-            }
-          }
-
-          // Process organizer
-          if (event.organizer?.email) {
-            const name = extractNameFromEmailOrDisplay(event.organizer.email, event.organizer.displayName || undefined)
-            
-            const contact: Contact = {
-              id: event.organizer.email,
-              name: name,
-              email: event.organizer.email,
-              company: extractCompanyFromEmail(event.organizer.email),
-              lastContact: parsedDate.toISOString(),
-              source: 'Calendar',
-              lastMeetingName: event.summary || 'Meeting'
-            }
-            
-            if (!calendarContacts.has(event.organizer.email) || new Date(contact.lastContact) > new Date(calendarContacts.get(event.organizer.email)!.lastContact)) {
-              calendarContacts.set(event.organizer.email, contact)
-            }
-          }
-
-          // Process creator
-          if (event.creator?.email) {
-            const name = extractNameFromEmailOrDisplay(event.creator.email, event.creator.displayName || undefined)
-            
-            const contact: Contact = {
-              id: event.creator.email,
-              name: name,
-              email: event.creator.email,
-              company: extractCompanyFromEmail(event.creator.email),
-              lastContact: parsedDate.toISOString(),
-              source: 'Calendar',
-              lastMeetingName: event.summary || 'Meeting'
-            }
-            
-            if (!calendarContacts.has(event.creator.email) || new Date(contact.lastContact) > new Date(calendarContacts.get(event.creator.email)!.lastContact)) {
-              calendarContacts.set(event.creator.email, contact)
-            }
-          }
-        } catch (dateError) {
-          console.log(`Calendar date parsing error: ${dateError}`)
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error fetching Calendar contacts:', error)
-  }
-
-  console.log(`✅ Found ${calendarContacts.size} contacts from Calendar`)
-  return Array.from(calendarContacts.values())
-}
-
-async function fetchContactPhotos(auth: InstanceType<typeof google.auth.OAuth2>, contacts: Contact[]): Promise<Contact[]> {
-  console.log('🖼️ Fetching contact photos from People API...')
-  const people = google.people({ version: 'v1', auth })
-  const contactsWithPhotos = [...contacts]
-  
-  try {
-    // First, try to get contacts using the People API connections
-    try {
-      console.log('Fetching from People API connections...')
-      const connectionsResponse = await people.people.connections.list({
-        resourceName: 'people/me',
-        pageSize: 1000,
-        personFields: 'emailAddresses,photos,names'
-      })
-      
-      if (connectionsResponse.data.connections) {
-        console.log(`Found ${connectionsResponse.data.connections.length} connections from People API`)
-        
-        // Create a map of email -> photo URL for faster lookup
-        const photoMap = new Map<string, string>()
-        
-        connectionsResponse.data.connections.forEach(person => {
-          if (person.emailAddresses && person.photos) {
-            person.emailAddresses.forEach(email => {
-              if (email.value && person.photos && person.photos.length > 0) {
-                const photo = person.photos[0]
-                if (photo.url) {
-                  // Add size parameter to get a reasonable sized avatar
-                  const photoUrl = photo.url.includes('=') ? photo.url : `${photo.url}=s150-c`
-                  photoMap.set(email.value.toLowerCase(), photoUrl)
-                  console.log(`Found photo for ${email.value}: ${photoUrl.substring(0, 50)}...`)
-                }
-              }
-            })
-          }
-        })
-        
-        console.log(`Photo map has ${photoMap.size} entries`)
-        
-        // Apply photos to our contacts
-        let photosApplied = 0
-        contactsWithPhotos.forEach(contact => {
-          const photoUrl = photoMap.get(contact.email.toLowerCase())
-          if (photoUrl) {
-            contact.photoUrl = photoUrl
-            photosApplied++
-            console.log(`Applied photo to ${contact.email}`)
-          }
-        })
-        
-        console.log(`Applied ${photosApplied} photos from People API connections`)
-      }
-    } catch (error) {
-      console.log(`Error fetching People API connections: ${error}`)
-    }
-    
-    const photosFound = contactsWithPhotos.filter(c => c.photoUrl).length
-    console.log(`✅ Found ${photosFound} contact photos out of ${contactsWithPhotos.length} contacts`)
-    
-    // Log first few contacts with photos for debugging
-    const contactsWithPhotoUrls = contactsWithPhotos.filter(c => c.photoUrl).slice(0, 3)
-    if (contactsWithPhotoUrls.length > 0) {
-      console.log('Sample contacts with photos:', contactsWithPhotoUrls.map(c => ({ 
-        email: c.email, 
-        photoUrl: c.photoUrl?.substring(0, 50) + '...' 
-      })))
-    }
-    
-  } catch (error) {
-    console.error('Error fetching contact photos:', error)
-  }
-  
-  return contactsWithPhotos
-}
-
-async function fetchGoogleContacts(auth: InstanceType<typeof google.auth.OAuth2>) {
-  console.log('🚀 Starting parallel fetch of Gmail and Calendar contacts...')
-  
-  // Fetch Gmail and Calendar contacts in parallel
-  const [gmailContacts, calendarContacts] = await Promise.all([
-    fetchGmailContacts(auth),
-    fetchCalendarContacts(auth)
-  ])
-
-  // Merge contacts, prioritizing the most recent interaction for each email
-  const contactsMap = new Map<string, Contact>()
-  
-  // Add Gmail contacts first
-  gmailContacts.forEach(contact => {
-    contactsMap.set(contact.email, contact)
-  })
-  
-  // Add Calendar contacts, intelligently merging names and keeping most recent data
-  calendarContacts.forEach(contact => {
-    const existing = contactsMap.get(contact.email)
-    if (!existing) {
-      // No existing contact, add the Calendar contact
-      contactsMap.set(contact.email, contact)
     } else {
-      // Merge contacts: keep most recent data but prefer Calendar name if it's better
-      const useCalendarName = 
-        // Use Calendar name if it's not just the email address
-        (contact.name !== contact.email && contact.name.length > 0) &&
-        // And Gmail name is just the email, very basic, or Calendar name is clearly better
-        (existing.name === existing.email || 
-         existing.name.length < contact.name.length ||
-         // Prefer names with spaces (full names) over single words
-         (contact.name.includes(' ') && !existing.name.includes(' ')))
-      
-      const mergedContact: Contact = {
-        ...existing,
-        // Keep most recent contact date
-        lastContact: new Date(contact.lastContact) > new Date(existing.lastContact) 
-          ? contact.lastContact 
-          : existing.lastContact,
-        // Use better name
-        name: useCalendarName ? contact.name : existing.name,
-        // Keep Calendar meeting info if Calendar contact is more recent
-        ...(new Date(contact.lastContact) > new Date(existing.lastContact) && {
-          lastMeetingName: contact.lastMeetingName,
-          source: contact.source
-        })
-      }
-      
-      contactsMap.set(contact.email, mergedContact)
+      console.log('No cache found')
     }
-  })
-
-  // Convert map to array and filter out contacts without proper dates
-  let contacts = Array.from(contactsMap.values()).filter(contact => {
-    return contact.lastContact && contact.lastContact !== 'Unknown'
-  })
-
-  console.log(`✅ Processed ${contacts.length} unique contacts from Gmail and Calendar interactions`)
-  
-  // Fetch contact photos
-  contacts = await fetchContactPhotos(auth, contacts)
-  
-  return contacts
-}
-
-function extractEmailFromHeader(header: string): string {
-  const match = header.match(/<(.+?)>/)
-  return match ? match[1] : header.trim()
-}
-
-function extractNameFromHeader(header: string): string {
-  const match = header.match(/^(.+?)\s*</)
-  return match ? match[1].trim().replace(/"/g, '') : ''
-}
-
-function extractNameFromEmailOrDisplay(email: string, displayName?: string): string {
-  // Use displayName if available and not just an email
-  if (displayName && displayName.trim() !== '' && !displayName.includes('@')) {
-    return displayName.trim().replace(/"/g, '')
+  } catch (error) {
+    console.error('Error reading cache:', error)
   }
   
-  // Try to extract name from email address
-  const localPart = email.split('@')[0]
-  
-  // Check for common name patterns in email addresses
-  if (localPart.includes('.')) {
-    // Handle formats like firstname.lastname@domain.com
-    const parts = localPart.split('.')
-    return parts.map(part => 
-      part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
-    ).join(' ')
-  } else if (localPart.includes('_')) {
-    // Handle formats like first_last@domain.com
-    const parts = localPart.split('_')
-    return parts.map(part => 
-      part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
-    ).join(' ')
-  } else if (localPart.includes('-')) {
-    // Handle formats like first-last@domain.com
-    const parts = localPart.split('-')
-    return parts.map(part => 
-      part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
-    ).join(' ')
-  } else {
-    // Just capitalize the first letter of the local part
-    return localPart.charAt(0).toUpperCase() + localPart.slice(1).toLowerCase()
-  }
+  return null
 }
 
-function extractEmailsFromHeader(header: string): string[] {
-  const emails: string[] = []
-  const matches = header.matchAll(/<(.+?)>/g)
-  for (const match of matches) {
-    emails.push(match[1])
+// Save contacts to cache in Firestore
+async function saveContactsToCache(userId: string, contacts: Contact[]): Promise<void> {
+  if (!db) {
+    console.warn('Firebase not initialized, skipping cache save')
+    return
   }
-  return emails.length > 0 ? emails : [header.trim()]
-}
 
-function extractEmailBody(payload: unknown): string {
-  if (!payload || typeof payload !== 'object') return ''
-  
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const payloadObj = payload as Record<string, any>
-  
-  // If it's a multipart message, find the text/plain part
-  if (payloadObj.parts && Array.isArray(payloadObj.parts)) {
-    for (const part of payloadObj.parts) {
-      if (part.mimeType === 'text/plain' && part.body?.data) {
-        return Buffer.from(part.body.data, 'base64').toString('utf-8')
-      }
-      // Recursively check nested parts
-      if (part.parts) {
-        const nestedBody = extractEmailBody(part)
-        if (nestedBody) return nestedBody
-      }
+  try {
+    const cacheData: CachedContacts = {
+      contacts,
+      cachedAt: Timestamp.now(),
+      userId
     }
+    
+    const cacheDoc = doc(db, 'contact-cache', userId)
+    await setDoc(cacheDoc, cacheData)
+    console.log(`✅ Cached ${contacts.length} contacts for user ${userId}`)
+  } catch (error) {
+    console.error('Error saving to cache:', error)
   }
-  
-  // If it's a single part text/plain message
-  if (payloadObj.mimeType === 'text/plain' && payloadObj.body?.data) {
-    return Buffer.from(payloadObj.body.data, 'base64').toString('utf-8')
-  }
-  
-  return ''
 }
 
 
 
-function extractCompanyFromEmail(email: string): string | undefined {
-  // Skip common email providers
-  const commonProviders = [
-    'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com',
-    'aol.com', 'protonmail.com', 'me.com', 'mac.com'
-  ]
-  
-  const domain = email.split('@')[1]?.toLowerCase()
-  if (!domain || commonProviders.includes(domain)) {
-    return undefined
-  }
-  
-  // Extract company name from domain
-  const domainParts = domain.split('.')
-  if (domainParts.length >= 2) {
-    // Get the main part of the domain (before .com, .org, etc.)
-    const mainDomain = domainParts[domainParts.length - 2]
-    // Capitalize first letter
-    return mainDomain.charAt(0).toUpperCase() + mainDomain.slice(1)
-  }
-  
-  return undefined
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -489,6 +104,17 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.replace('Bearer ', '')
+    const userId = getUserCacheKey(token)
+    
+    // Check for cached contacts first
+    const cachedContacts = await getCachedContacts(userId)
+    if (cachedContacts) {
+      console.log('Returning cached contacts immediately')
+      return NextResponse.json(cachedContacts)
+    }
+    
+    // No valid cache, fetch fresh data
+    console.log('No valid cache found, fetching fresh contacts')
     
     // Properly configure OAuth2 client with credentials for token refresh
     const auth = new google.auth.OAuth2(
@@ -501,6 +127,10 @@ export async function GET(request: NextRequest) {
     auth.setCredentials({ access_token: token })
 
     const contacts = await fetchGoogleContacts(auth)
+    
+    // Cache the fresh contacts
+    await saveContactsToCache(userId, contacts)
+    
     return NextResponse.json(contacts)
   } catch (error: unknown) {
     console.error('Error fetching contacts:', error)
