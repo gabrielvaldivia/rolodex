@@ -2130,11 +2130,7 @@ export default function Home() {
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative flex-1 min-w-0">
               <Input
-                placeholder={
-                  currentView === "contacts"
-                    ? "Search contacts..."
-                    : "Search companies..."
-                }
+                placeholder={currentView === "contacts" ? "Search" : "Search"}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="h-8 pr-8 text-sm md:text-base"
