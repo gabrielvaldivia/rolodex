@@ -109,10 +109,18 @@ export const EmailText: React.FC<EmailTextProps> = ({
 
   // Function to detect and format URLs
   const formatUrls = (text: string) => {
+    // First, handle Gmail's format: "text" <url>
+    const gmailLinkRegex = /"([^"]+)"\s*<([^>]+)>/g;
+
+    // Then handle regular URLs
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
 
     return text
+      .replace(
+        gmailLinkRegex,
+        '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">$1</a>'
+      )
       .replace(
         urlRegex,
         '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">$1</a>'

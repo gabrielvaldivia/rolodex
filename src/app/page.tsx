@@ -1788,9 +1788,9 @@ export default function Home() {
         throw new Error("Authentication required");
       }
 
-      // Use refresh endpoint to force fresh data
-      const endpoint = "/api/contacts/refresh";
-      const method = "POST";
+      // Use regular endpoint for initial load (with caching), refresh endpoint for background sync
+      const endpoint = background ? "/api/contacts/refresh" : "/api/contacts";
+      const method = background ? "POST" : "GET";
 
       const response = await fetch(endpoint, {
         method,
@@ -2415,10 +2415,23 @@ export default function Home() {
         {loading ? (
           <div className="text-center py-8 px-8">
             <div className="text-sm text-muted-foreground">
-              Syncing contacts from Google...
+              Loading contacts...
             </div>
             <div className="text-xs text-gray-400 mt-2">
-              Fetching recent emails and calendar events (5-10 seconds)
+              {backgroundSyncing
+                ? "Syncing from Google (5-10 seconds)"
+                : "Loading cached data..."}
+            </div>
+          </div>
+        ) : contacts.length === 0 ? (
+          <div className="text-center py-8 px-8">
+            <div className="text-sm text-muted-foreground">
+              No contacts found
+            </div>
+            <div className="text-xs text-gray-400 mt-2">
+              {backgroundSyncing
+                ? "Syncing from Google..."
+                : "Click the refresh button to sync contacts from Gmail and Calendar"}
             </div>
           </div>
         ) : (
