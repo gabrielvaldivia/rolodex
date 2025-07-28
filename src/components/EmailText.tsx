@@ -15,10 +15,16 @@ export const EmailText: React.FC<EmailTextProps> = ({
   const processEmailContent = (text: string) => {
     // First, truncate at common email chain patterns to show only the latest email
     const emailChainPatterns = [
-      // Match "On [day], [month] [date], [year] at [time] [name] wrote:"
-      /On\s+\w+,\s+\w+\s+\d+,\s+\d+\s+at\s+\d+:\d+\s*(AM|PM)?\s+.+?\s+wrote:/i,
-      // Match "On [month] [date], [year] at [time] [name] wrote:"
+      // Match "On [month] [date], [year] at [time], [name] <email> wrote:" (Gmail format with seconds)
+      /On\s+\w+\s+\d+,\s+\d+\s+at\s+\d+:\d+:\d+\s*(AM|PM)?,\s+.+?\s+<.+?>\s+wrote:/i,
+      // Match "On [month] [date], [year] at [time], [name] wrote:" (Gmail format without seconds)
+      /On\s+\w+\s+\d+,\s+\d+\s+at\s+\d+:\d+\s*(AM|PM)?,\s+.+?\s+wrote:/i,
+      // Match "On [day], [month] [date], [year] at [time], [name] wrote:" (with comma after time)
+      /On\s+\w+,\s+\w+\s+\d+,\s+\d+\s+at\s+\d+:\d+\s*(AM|PM)?,\s+.+?\s+wrote:/i,
+      // Match "On [month] [date], [year] at [time] [name] wrote:" (without comma after time)
       /On\s+\w+\s+\d+,\s+\d+\s+at\s+\d+:\d+\s*(AM|PM)?\s+.+?\s+wrote:/i,
+      // Match "On [day], [month] [date], [year] at [time] [name] wrote:" (without comma after time)
+      /On\s+\w+,\s+\w+\s+\d+,\s+\d+\s+at\s+\d+:\d+\s*(AM|PM)?\s+.+?\s+wrote:/i,
       // Match "On [date]/[month]/[year] at [time] [name] wrote:"
       /On\s+\d+\/\d+\/\d+\s+at\s+\d+:\d+\s*(AM|PM)?\s+.+?\s+wrote:/i,
       // Match "On [date]-[month]-[year] at [time] [name] wrote:"
@@ -35,16 +41,36 @@ export const EmailText: React.FC<EmailTextProps> = ({
     ];
 
     let truncatedText = text;
+    let earliestMatch: { index: number; pattern: string } | null = null;
 
+    // Find the earliest email chain pattern match
     for (const pattern of emailChainPatterns) {
       const match = truncatedText.match(pattern);
-      if (match) {
-        // Only truncate if the match is not at the very beginning of the text
-        if (match.index && match.index > 10) {
-          truncatedText = truncatedText.substring(0, match.index).trim();
-          break;
+      if (match && match.index !== undefined) {
+        console.log(
+          "📧 EmailText: Found email chain pattern match:",
+          match[0],
+          "at index:",
+          match.index
+        );
+        // Only consider matches after the first 20 characters (to avoid false positives)
+        if (match.index > 20) {
+          if (!earliestMatch || match.index < earliestMatch.index) {
+            earliestMatch = { index: match.index, pattern: match[0] };
+          }
         }
       }
+    }
+
+    // Truncate at the earliest match found
+    if (earliestMatch) {
+      console.log(
+        "📧 EmailText: Truncating at earliest pattern:",
+        earliestMatch.pattern,
+        "at index:",
+        earliestMatch.index
+      );
+      truncatedText = truncatedText.substring(0, earliestMatch.index).trim();
     }
 
     const lines = truncatedText.split("\n");
