@@ -2162,7 +2162,7 @@ export default function Home() {
                 placeholder={currentView === "contacts" ? "Search" : "Search"}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-8 pr-8 text-sm md:text-base"
+                className="h-8 pr-8 text-sm md:text-sm"
               />
               {searchTerm && (
                 <Button
@@ -2419,8 +2419,8 @@ export default function Home() {
             </div>
             <div className="text-xs text-gray-400 mt-2">
               {backgroundSyncing
-                ? "Syncing from Google (5-10 seconds)"
-                : "Loading cached data..."}
+                ? "Syncing from Google (this may take a couple minutes)"
+                : "This may take a couple minutes"}
             </div>
           </div>
         ) : contacts.length === 0 ? (

@@ -260,12 +260,24 @@ export async function fetchCalendarContacts(auth: InstanceType<typeof google.aut
 
     if (calendarResponse.data.items) {
       for (const event of calendarResponse.data.items) {
+        // Use the event start time as the "last contact" time, but only for past events
         const eventDate = event.start?.dateTime || event.start?.date
         if (!eventDate) continue
+
+        // Skip repeating events to avoid complexity
+        if (event.recurringEventId) {
+          continue // Skip recurring events
+        }
 
         try {
           const parsedDate = new Date(eventDate)
           if (isNaN(parsedDate.getTime())) continue
+          
+          // Only include events that have already happened (past events)
+          const now = new Date()
+          if (parsedDate > now) {
+            continue // Skip future events
+          }
 
           // Process attendees
           if (event.attendees) {
