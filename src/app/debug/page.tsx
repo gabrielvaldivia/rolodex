@@ -17,6 +17,43 @@ export default function DebugPage() {
   const { data: session, status } = useSession();
   const [envCheck, setEnvCheck] = useState<Record<string, boolean>>({});
   const [apiTest, setApiTest] = useState<string>("");
+  const [cacheInfo, setCacheInfo] = useState<string>("");
+
+  // Check cache status
+  const checkCache = () => {
+    try {
+      const cached = localStorage.getItem("rolodex-contacts-cache");
+      const timestamp = localStorage.getItem(
+        "rolodex-contacts-cache-timestamp"
+      );
+
+      if (!cached || !timestamp) {
+        setCacheInfo("No cached contacts found");
+        return;
+      }
+
+      const contacts = JSON.parse(cached);
+      const cacheAge = Date.now() - parseInt(timestamp);
+      const ageHours = Math.round(cacheAge / (1000 * 60 * 60));
+
+      setCacheInfo(
+        `Cached ${contacts.length} contacts (${ageHours} hours old)`
+      );
+    } catch (error) {
+      setCacheInfo(`Error reading cache: ${error}`);
+    }
+  };
+
+  // Clear cache
+  const clearCache = () => {
+    try {
+      localStorage.removeItem("rolodex-contacts-cache");
+      localStorage.removeItem("rolodex-contacts-cache-timestamp");
+      setCacheInfo("Cache cleared");
+    } catch (error) {
+      setCacheInfo(`Error clearing cache: ${error}`);
+    }
+  };
 
   useEffect(() => {
     // Check environment variables (client-side won't see server vars, but we can test endpoints)
@@ -31,6 +68,9 @@ export default function DebugPage() {
       .then((res) => (res.ok ? res.text() : Promise.reject(res.status)))
       .then((data) => setApiTest(`✅ API working: ${data}`))
       .catch((err) => setApiTest(`❌ API failed: ${err}`));
+
+    // Check cache status on mount
+    checkCache();
   }, []);
 
   return (
@@ -112,6 +152,27 @@ export default function DebugPage() {
             errors.
           </p>
           <p>Common issues: CORS errors, 404s, authentication failures</p>
+        </div>
+
+        <div className="border p-4 rounded">
+          <h2 className="font-semibold mb-2">Cache Management</h2>
+          <p className="mb-2">
+            {cacheInfo || "Click 'Check Cache' to see status"}
+          </p>
+          <div className="space-x-2">
+            <button
+              onClick={checkCache}
+              className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
+            >
+              Check Cache
+            </button>
+            <button
+              onClick={clearCache}
+              className="bg-red-500 text-white px-3 py-1 rounded text-sm"
+            >
+              Clear Cache
+            </button>
+          </div>
         </div>
       </div>
 

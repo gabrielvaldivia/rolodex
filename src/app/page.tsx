@@ -754,6 +754,7 @@ export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [cachedContacts, setCachedContacts] = useState<Contact[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -778,6 +779,7 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaveError, setLastSaveError] = useState<string | null>(null);
   const [backgroundSyncing, setBackgroundSyncing] = useState(false);
+  const [freshDataLoaded, setFreshDataLoaded] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
   const [customTagColors, setCustomTagColors] = useState<
@@ -1674,9 +1676,27 @@ export default function Home() {
     });
   };
 
+  // Load cached contacts immediately on mount
+  useEffect(() => {
+    const cachedContacts = loadContactsFromCache();
+    if (cachedContacts) {
+      console.log("🚀 Loading cached contacts on mount");
+      setContacts(cachedContacts);
+      setCachedContacts(cachedContacts);
+    }
+  }, []);
+
+  // Load fresh contacts when session is available
   useEffect(() => {
     if (session) {
-      loadContacts();
+      // If we don't have any contacts loaded yet, load them
+      if (contacts.length === 0) {
+        loadContacts();
+      } else {
+        // If we already have contacts (from cache), just fetch fresh data in background
+        console.log("🔄 Fetching fresh contacts from backend");
+        fetchContacts(true); // background = true
+      }
     }
   }, [session]);
 
@@ -1758,11 +1778,72 @@ export default function Home() {
   // Auto-sync functionality moved to settings page
   // Backend caching now handles this automatically
 
+  // Cache contacts in localStorage
+  const saveContactsToCache = (contacts: Contact[]) => {
+    try {
+      localStorage.setItem("rolodex-contacts-cache", JSON.stringify(contacts));
+      localStorage.setItem(
+        "rolodex-contacts-cache-timestamp",
+        Date.now().toString()
+      );
+    } catch (error) {
+      console.error("Failed to save contacts to cache:", error);
+    }
+  };
+
+  // Clear contacts cache
+  const clearContactsCache = () => {
+    try {
+      localStorage.removeItem("rolodex-contacts-cache");
+      localStorage.removeItem("rolodex-contacts-cache-timestamp");
+      console.log("🗑️ Contacts cache cleared");
+    } catch (error) {
+      console.error("Failed to clear contacts cache:", error);
+    }
+  };
+
+  // Load contacts from localStorage cache
+  const loadContactsFromCache = (): Contact[] | null => {
+    try {
+      const cached = localStorage.getItem("rolodex-contacts-cache");
+      const timestamp = localStorage.getItem(
+        "rolodex-contacts-cache-timestamp"
+      );
+
+      if (!cached || !timestamp) return null;
+
+      // Check if cache is less than 24 hours old
+      const cacheAge = Date.now() - parseInt(timestamp);
+      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+
+      if (cacheAge > maxAge) {
+        console.log("Cache expired, will fetch fresh data");
+        return null;
+      }
+
+      const contacts = JSON.parse(cached);
+      console.log("📦 Loaded", contacts.length, "contacts from cache");
+      return contacts;
+    } catch (error) {
+      console.error("Failed to load contacts from cache:", error);
+      return null;
+    }
+  };
+
   const loadContacts = async () => {
-    // Backend caching is now handled automatically by the API
-    // The API will return cached data immediately if available
-    console.log("🔄 Loading contacts from backend (with automatic caching)");
-    fetchContacts();
+    // First, try to load from cache for immediate display
+    const cachedContacts = loadContactsFromCache();
+    if (cachedContacts) {
+      console.log("🚀 Showing cached contacts immediately");
+      setContacts(cachedContacts);
+      setCachedContacts(cachedContacts);
+    }
+
+    // Then fetch fresh data in the background (only if we have a session)
+    if (session) {
+      console.log("🔄 Fetching fresh contacts from backend");
+      fetchContacts(true); // background = true
+    }
   };
 
   const fetchContacts = async (background = false) => {
@@ -1845,7 +1926,17 @@ export default function Home() {
         "total contacts"
       ); // Debug: count how many contacts have photos
 
+      // Save to cache and update state
+      saveContactsToCache(contactsWithEdits);
       setContacts(contactsWithEdits);
+
+      // If this was a background fetch, show a subtle indicator
+      if (background) {
+        console.log("✅ Fresh contacts loaded in background");
+        setFreshDataLoaded(true);
+        // Clear the indicator after 3 seconds
+        setTimeout(() => setFreshDataLoaded(false), 3000);
+      }
 
       // Backend caching is now handled automatically by the API
     } catch (error) {
@@ -2081,6 +2172,17 @@ export default function Home() {
     );
   }
 
+  // Show loading state if no contacts are loaded yet and we're not authenticated
+  if (!session && contacts.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-sm text-muted-foreground">
+          Loading cached contacts...
+        </div>
+      </div>
+    );
+  }
+
   if (!session) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -2102,6 +2204,13 @@ export default function Home() {
       <div className="">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8 px-8">
           <div className="flex items-center gap-4">
+            {/* Fresh data indicator */}
+            {freshDataLoaded && (
+              <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-200">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                Fresh data loaded
+              </div>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -2472,7 +2581,6 @@ export default function Home() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12 text-center"></TableHead>
-                      <TableHead className="w-12 text-center"></TableHead>
                       <TableHead
                         onClick={() => handleSort("name")}
                         className="cursor-pointer hover:bg-muted/50 max-w-32"
@@ -2512,31 +2620,6 @@ export default function Home() {
                         key={contact.id}
                         className="cursor-pointer hover:bg-muted/50"
                       >
-                        <TableCell className="text-center">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              updateContactStarred(
-                                contact.id,
-                                !contact.starred
-                              );
-                            }}
-                            className="hover:bg-muted/50 p-1 rounded transition-colors"
-                            title={
-                              contact.starred
-                                ? "Unstar contact"
-                                : "Star contact"
-                            }
-                          >
-                            <Star
-                              className={`h-4 w-4 ${
-                                contact.starred
-                                  ? "fill-yellow-400 text-yellow-400"
-                                  : "text-gray-400 hover:text-yellow-400"
-                              }`}
-                            />
-                          </button>
-                        </TableCell>
                         <TableCell className="text-center">
                           <ContactAvatar
                             contact={contact}
@@ -2616,7 +2699,6 @@ export default function Home() {
                 <Table className="w-full">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-12 text-center"></TableHead>
                       <TableHead
                         onClick={() => handleSort("name")}
                         className="cursor-pointer hover:bg-muted/50 min-w-48"
@@ -2649,31 +2731,6 @@ export default function Home() {
                         key={company.name}
                         className="cursor-pointer hover:bg-muted/50"
                       >
-                        <TableCell className="text-center">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              updateCompanyStarred(
-                                company.name,
-                                !company.starred
-                              );
-                            }}
-                            className="hover:bg-muted/50 p-1 rounded transition-colors"
-                            title={
-                              company.starred
-                                ? "Unstar company"
-                                : "Star company"
-                            }
-                          >
-                            <Star
-                              className={`h-4 w-4 ${
-                                company.starred
-                                  ? "fill-yellow-400 text-yellow-400"
-                                  : "text-gray-400 hover:text-yellow-400"
-                              }`}
-                            />
-                          </button>
-                        </TableCell>
                         <TableCell
                           className="font-medium truncate pr-4"
                           onClick={() => handleCompanyClick(company)}
