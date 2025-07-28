@@ -66,27 +66,50 @@ function extractEmailBody(payload: any): string {
 }
 
 export async function fetchGmailContacts(auth: InstanceType<typeof google.auth.OAuth2>): Promise<Contact[]> {
+  console.log('📧 Starting Gmail contacts fetch...')
 
   const gmail = google.gmail({ version: 'v1', auth })
   const gmailContacts = new Map<string, Contact>()
+  
+  // Test Gmail API access
+  try {
+    console.log('🧪 Testing Gmail API access...')
+    const testResponse = await gmail.users.getProfile({ userId: 'me' })
+    console.log('✅ Gmail API access successful:', testResponse.data.emailAddress)
+  } catch (testError) {
+    console.error('❌ Gmail API access failed:', testError)
+    console.error('Gmail API error details:', {
+      message: testError instanceof Error ? testError.message : String(testError),
+      code: (testError as { code?: number })?.code,
+      status: (testError as { status?: number })?.status
+    })
+  }
 
   // Get the user's email address
   let userEmail = ''
   try {
     const profile = await gmail.users.getProfile({ userId: 'me' })
     userEmail = profile.data.emailAddress || ''
-    console.log(`User email: ${userEmail}`)
+    console.log(`👤 User email: ${userEmail}`)
   } catch (error) {
-    console.error('Error getting user profile:', error)
+    console.error('❌ Error getting user profile:', error)
+    console.error('Profile error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      code: (error as { code?: number })?.code,
+      status: (error as { status?: number })?.status
+    })
   }
 
   try {
     // Get recent emails for comprehensive contact discovery
+    console.log('📧 Fetching Gmail messages...')
     const emailResponse = await gmail.users.messages.list({
       userId: 'me',
       maxResults: 2500, // Increased to match Calendar events for better coverage
       q: 'in:sent OR in:inbox', // Get both sent and received emails
     })
+    
+    console.log(`📧 Found ${emailResponse.data.messages?.length || 0} Gmail messages`)
 
     if (emailResponse.data.messages) {
 
@@ -238,7 +261,12 @@ export async function fetchGmailContacts(auth: InstanceType<typeof google.auth.O
       }
     }
   } catch (error) {
-    console.error('Error fetching Gmail contacts:', error)
+    console.error('❌ Error fetching Gmail contacts:', error)
+    console.error('Gmail error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      code: (error as { code?: number })?.code,
+      status: (error as { status?: number })?.status
+    })
   }
 
   console.log(`✅ Found ${gmailContacts.size} contacts from Gmail`)
@@ -246,17 +274,20 @@ export async function fetchGmailContacts(auth: InstanceType<typeof google.auth.O
 }
 
 export async function fetchCalendarContacts(auth: InstanceType<typeof google.auth.OAuth2>): Promise<Contact[]> {
-  console.log('Fetching Calendar events...')
+  console.log('📅 Starting Calendar contacts fetch...')
   const calendar = google.calendar({ version: 'v3', auth })
   const calendarContacts = new Map<string, Contact>()
 
   try {
+    console.log('📅 Fetching Calendar events...')
     const calendarResponse = await calendar.events.list({
       calendarId: 'primary',
       maxResults: 2500,
       singleEvents: true,
       orderBy: 'startTime',
     })
+    
+    console.log(`📅 Found ${calendarResponse.data.items?.length || 0} Calendar events`)
 
     if (calendarResponse.data.items) {
       for (const event of calendarResponse.data.items) {
@@ -345,7 +376,12 @@ export async function fetchCalendarContacts(auth: InstanceType<typeof google.aut
       }
     }
   } catch (error) {
-    console.error('Error fetching Calendar contacts:', error)
+    console.error('❌ Error fetching Calendar contacts:', error)
+    console.error('Calendar error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      code: (error as { code?: number })?.code,
+      status: (error as { status?: number })?.status
+    })
   }
 
   console.log(`✅ Found ${calendarContacts.size} contacts from Calendar`)
@@ -430,12 +466,25 @@ export async function fetchContactPhotos(auth: InstanceType<typeof google.auth.O
 export async function fetchGoogleContacts(auth: InstanceType<typeof google.auth.OAuth2>) {
   console.log('🚀 Starting parallel fetch of Gmail and Calendar contacts...')
   
+  // Test authentication first
+  try {
+    console.log('🔐 Testing authentication...')
+    const credentials = await auth.getAccessToken()
+    console.log('✅ Authentication successful, access token available')
+    console.log('🔑 Access token length:', credentials.token?.length || 0)
+  } catch (authError) {
+    console.error('❌ Authentication failed:', authError)
+    return []
+  }
+  
   try {
     // Fetch Gmail and Calendar contacts in parallel
     const [gmailContacts, calendarContacts] = await Promise.all([
       fetchGmailContacts(auth),
       fetchCalendarContacts(auth)
     ])
+
+    console.log(`📊 Gmail contacts: ${gmailContacts.length}, Calendar contacts: ${calendarContacts.length}`)
 
     
 

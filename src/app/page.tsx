@@ -1810,11 +1810,26 @@ export default function Home() {
         "rolodex-contacts-cache-timestamp"
       );
 
-      if (!cached || !timestamp) return null;
+      console.log("🔍 Cache debug:", {
+        hasCached: !!cached,
+        hasTimestamp: !!timestamp,
+        cachedLength: cached ? cached.length : 0,
+      });
+
+      if (!cached || !timestamp) {
+        console.log("❌ No cache found or missing timestamp");
+        return null;
+      }
 
       // Check if cache is less than 24 hours old
       const cacheAge = Date.now() - parseInt(timestamp);
       const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+
+      console.log("⏰ Cache age:", {
+        cacheAge: Math.round(cacheAge / (1000 * 60 * 60)),
+        maxAge: Math.round(maxAge / (1000 * 60 * 60)),
+        isExpired: cacheAge > maxAge,
+      });
 
       if (cacheAge > maxAge) {
         console.log("Cache expired, will fetch fresh data");
@@ -1837,6 +1852,8 @@ export default function Home() {
       console.log("🚀 Showing cached contacts immediately");
       setContacts(cachedContacts);
       setCachedContacts(cachedContacts);
+    } else {
+      console.log("📭 No cached contacts available, will show loading state");
     }
 
     // Then fetch fresh data in the background (only if we have a session)
@@ -1930,6 +1947,11 @@ export default function Home() {
       saveContactsToCache(contactsWithEdits);
       setContacts(contactsWithEdits);
 
+      console.log(
+        `✅ ${background ? "Background" : "Initial"} contacts loaded:`,
+        contactsWithEdits.length
+      );
+
       // If this was a background fetch, show a subtle indicator
       if (background) {
         console.log("✅ Fresh contacts loaded in background");
@@ -1949,9 +1971,13 @@ export default function Home() {
         errorMessage.includes("Gmail API error") ||
         errorMessage.includes("401")
       ) {
-        alert(
-          "Your Google account needs to be re-authenticated to access Gmail and Calendar data. Please sign out and sign in again."
-        );
+        if (background) {
+          console.log("❌ Background sync failed, keeping existing contacts");
+        } else {
+          alert(
+            "Your Google account needs to be re-authenticated to access Gmail and Calendar data. Please sign out and sign in again."
+          );
+        }
       }
     } finally {
       if (background) {
@@ -2142,6 +2168,11 @@ export default function Home() {
     );
   });
 
+  // Debug: Log when contacts are being filtered
+  if (contacts.length > 0 && filteredContacts.length === 0) {
+    console.log("⚠️ All contacts filtered out - this might be the issue!");
+  }
+
   const filteredCompanies = groupContactsByCompany(filteredContacts).filter(
     (company) => {
       const matchesSearch =
@@ -2172,17 +2203,8 @@ export default function Home() {
     );
   }
 
-  // Show loading state if no contacts are loaded yet and we're not authenticated
-  if (!session && contacts.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-sm text-muted-foreground">
-          Loading cached contacts...
-        </div>
-      </div>
-    );
-  }
-
+  // Show loading state only briefly while checking for cached contacts
+  // If we have no session and no contacts, show sign-in screen instead of infinite loading
   if (!session) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -2194,6 +2216,22 @@ export default function Home() {
           <Button onClick={() => signIn("google")} variant="outline">
             Sign in with Google
           </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state when we have no contacts but are authenticated
+  if (session && contacts.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+          <div className="text-sm text-muted-foreground">
+            {backgroundSyncing
+              ? "Syncing contacts from Google..."
+              : "Loading contacts..."}
+          </div>
         </div>
       </div>
     );
