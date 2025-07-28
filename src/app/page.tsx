@@ -2841,7 +2841,7 @@ export default function Home() {
 
       {/* Company Detail Sheet */}
       <Sheet open={isCompanySheetOpen} onOpenChange={setIsCompanySheetOpen}>
-        <SheetContent className="w-[400px] sm:w-[500px] lg:w-[600px] max-w-[90vw] overflow-y-auto">
+        <SheetContent className="w-[400px] sm:w-[520px] lg:w-[600px] max-w-[90vw] overflow-y-auto">
           {selectedCompany && (
             <>
               <SheetHeader className="space-y-3">
@@ -3233,7 +3233,7 @@ export default function Home() {
 
       {/* Contact Edit Sheet */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent className="w-[400px] sm:w-[500px] lg:w-[600px] max-w-[90vw] overflow-y-auto">
+        <SheetContent className="w-[400px] sm:w-[520px] lg:w-[600px] max-w-[90vw] overflow-y-auto">
           {editedContact && (
             <>
               <SheetHeader className="space-y-3">
@@ -3488,7 +3488,7 @@ export default function Home() {
 
       {/* Tag Management Sheet */}
       <Sheet open={showTagManager} onOpenChange={setShowTagManager}>
-        <SheetContent className="w-[400px] sm:w-[500px] lg:w-[600px] max-w-[90vw] overflow-y-auto">
+        <SheetContent className="w-[400px] sm:w-[520px] lg:w-[600px] max-w-[90vw] overflow-y-auto">
           {editingTag && (
             <>
               <SheetHeader className="space-y-3">
