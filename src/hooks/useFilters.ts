@@ -1,0 +1,315 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { Contact, Company, SortField, SortDirection, View, ViewType } from "@/types";
+import { saveToLocalStorage, loadFromLocalStorage } from "@/lib/utils";
+
+export const useFilters = () => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortField, setSortField] = useState<SortField>("lastContact");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [currentView, setCurrentView] = useState<View>("contacts");
+  const [viewType, setViewType] = useState<ViewType>("table");
+  const [showHidden, setShowHidden] = useState(false);
+  const [showStarred, setShowStarred] = useState(false);
+  const [showGmail, setShowGmail] = useState(true);
+  const [showCalendar, setShowCalendar] = useState(true);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [customTagColors, setCustomTagColors] = useState<
+    Record<string, { bg: string; text: string; border: string }>
+  >({});
+  const [columnOrder, setColumnOrder] = useState<string[]>([]);
+
+  // Load custom tag colors from localStorage
+  useEffect(() => {
+    const savedColors = loadFromLocalStorage("rolodex-custom-tag-colors", {});
+    setCustomTagColors(savedColors);
+  }, []);
+
+  // Load view type from localStorage
+  useEffect(() => {
+    const savedViewType = loadFromLocalStorage<ViewType>("rolodex-view-type", "table");
+    setViewType(savedViewType);
+  }, []);
+
+  // Load current view from localStorage
+  useEffect(() => {
+    const savedCurrentView = loadFromLocalStorage<View>("rolodex-current-view", "contacts");
+    setCurrentView(savedCurrentView);
+  }, []);
+
+  // Load column order from localStorage
+  useEffect(() => {
+    const savedColumnOrder = loadFromLocalStorage<string[]>("rolodex-column-order", []);
+    setColumnOrder(savedColumnOrder);
+  }, []);
+
+  // Save custom tag colors to localStorage
+  const saveCustomTagColors = useCallback((
+    colors: Record<string, { bg: string; text: string; border: string }>
+  ) => {
+    setCustomTagColors(colors);
+    saveToLocalStorage("rolodex-custom-tag-colors", colors);
+  }, []);
+
+  // Save view type to localStorage
+  const saveViewType = useCallback((newViewType: ViewType) => {
+    setViewType(newViewType);
+    saveToLocalStorage("rolodex-view-type", newViewType);
+  }, []);
+
+  // Save current view to localStorage
+  const saveCurrentView = useCallback((newView: View) => {
+    setCurrentView(newView);
+    saveToLocalStorage("rolodex-current-view", newView);
+  }, []);
+
+  // Save column order to localStorage
+  const saveColumnOrder = useCallback((newOrder: string[]) => {
+    setColumnOrder(newOrder);
+    saveToLocalStorage("rolodex-column-order", newOrder);
+  }, []);
+
+  // Extract all unique tags from contacts for autocomplete
+  const updateAllTags = useCallback((contacts: Contact[]) => {
+    const allTagsSet = new Set<string>();
+    contacts.forEach((contact) => {
+      if (contact.tags) {
+        contact.tags.forEach((tag) => allTagsSet.add(tag));
+      }
+    });
+    setAllTags(Array.from(allTagsSet).sort());
+  }, []);
+
+  const handleSort = useCallback((field: SortField) => {
+    if (sortField === field) {
+      // Toggle direction if clicking the same field
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // Set new field with ascending direction
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  }, [sortField, sortDirection]);
+
+  const getSortIcon = useCallback((field: SortField) => {
+    if (sortField !== field) {
+      return "⇅";
+    }
+    return sortDirection === "asc" ? "↑" : "↓";
+  }, [sortField, sortDirection]);
+
+  const sortContacts = useCallback((contacts: Contact[]) => {
+    return [...contacts].sort((a, b) => {
+      // Always prioritize starred contacts first
+      if (a.starred && !b.starred) return -1;
+      if (!a.starred && b.starred) return 1;
+
+      let aVal: string | number;
+      let bVal: string | number;
+
+      switch (sortField) {
+        case "name":
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+          break;
+        case "email":
+          aVal = a.email.toLowerCase();
+          bVal = b.email.toLowerCase();
+          break;
+        case "company":
+          aVal = (a.company || "").toLowerCase();
+          bVal = (b.company || "").toLowerCase();
+          break;
+        case "lastContact":
+          // Handle special case for "Unknown"
+          if (a.lastContact === "Unknown") {
+            aVal = new Date(0).getTime(); // Very old date
+          } else {
+            aVal = new Date(a.lastContact).getTime();
+          }
+          if (b.lastContact === "Unknown") {
+            bVal = new Date(0).getTime();
+          } else {
+            bVal = new Date(b.lastContact).getTime();
+          }
+          break;
+        case "tags":
+          // Sort by first tag alphabetically, empty tags go to end
+          const aFirstTag =
+            a.tags && a.tags.length > 0
+              ? a.tags.sort()[0].toLowerCase()
+              : "zzz_no_tags";
+          const bFirstTag =
+            b.tags && b.tags.length > 0
+              ? b.tags.sort()[0].toLowerCase()
+              : "zzz_no_tags";
+          aVal = aFirstTag;
+          bVal = bFirstTag;
+          break;
+        default:
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+      }
+
+      if (sortDirection === "asc") {
+        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+      } else {
+        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+      }
+    });
+  }, [sortField, sortDirection]);
+
+  const sortCompanies = useCallback((companies: Company[]) => {
+    return [...companies].sort((a, b) => {
+      // Always prioritize starred companies first
+      if (a.starred && !b.starred) return -1;
+      if (!a.starred && b.starred) return 1;
+
+      let aVal: string | number;
+      let bVal: string | number;
+
+      switch (sortField) {
+        case "name":
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+          break;
+        case "company":
+          aVal = a.contactCount;
+          bVal = b.contactCount;
+          break;
+        case "lastContact":
+          // Handle special case for "Unknown"
+          if (a.lastContact === "Unknown") {
+            aVal = new Date(0).getTime(); // Very old date
+          } else {
+            aVal = new Date(a.lastContact).getTime();
+          }
+          if (b.lastContact === "Unknown") {
+            bVal = new Date(0).getTime();
+          } else {
+            bVal = new Date(b.lastContact).getTime();
+          }
+          break;
+        case "tags":
+          // Sort by first tag alphabetically, empty tags go to end
+          const aFirstTag =
+            a.tags && a.tags.length > 0
+              ? a.tags.sort()[0].toLowerCase()
+              : "zzz_no_tags";
+          const bFirstTag =
+            b.tags && b.tags.length > 0
+              ? b.tags.sort()[0].toLowerCase()
+              : "zzz_no_tags";
+          aVal = aFirstTag;
+          bVal = bFirstTag;
+          break;
+        default:
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+      }
+
+      if (sortDirection === "asc") {
+        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+      } else {
+        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+      }
+    });
+  }, [sortField, sortDirection]);
+
+  const filterContacts = useCallback((contacts: Contact[]) => {
+    return contacts.filter((contact) => {
+      const matchesSearch =
+        contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (contact.company || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        (contact.tags || []).some((tag) =>
+          tag.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+      const isVisible = showHidden || !contact.hidden;
+      const matchesStarred = !showStarred || contact.starred;
+      const matchesTags =
+        selectedTags.length === 0 ||
+        selectedTags.some((selectedTag) => {
+          if (selectedTag === "No Tags") {
+            return !contact.tags || contact.tags.length === 0;
+          }
+          return (contact.tags || []).includes(selectedTag);
+        });
+
+      const matchesSource =
+        (contact.source === "Gmail" && showGmail) ||
+        (contact.source === "Calendar" && showCalendar);
+
+      return (
+        matchesSearch &&
+        isVisible &&
+        matchesStarred &&
+        matchesTags &&
+        matchesSource
+      );
+    });
+  }, [searchTerm, showHidden, showStarred, selectedTags, showGmail, showCalendar]);
+
+  const filterCompanies = useCallback((companies: Company[]) => {
+    return companies.filter((company) => {
+      const matchesSearch =
+        company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (company.tags || []).some((tag) =>
+          tag.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      const isVisible = showHidden || !company.hidden;
+      const matchesStarred = !showStarred || company.starred;
+      const matchesTags =
+        selectedTags.length === 0 ||
+        selectedTags.some((selectedTag) => {
+          if (selectedTag === "No Tags") {
+            return !company.tags || company.tags.length === 0;
+          }
+          return (company.tags || []).includes(selectedTag);
+        });
+
+      return matchesSearch && isVisible && matchesStarred && matchesTags;
+    });
+  }, [searchTerm, showHidden, showStarred, selectedTags]);
+
+  return {
+    // State
+    searchTerm,
+    setSearchTerm,
+    sortField,
+    sortDirection,
+    currentView,
+    viewType,
+    showHidden,
+    setShowHidden,
+    showStarred,
+    setShowStarred,
+    showGmail,
+    setShowGmail,
+    showCalendar,
+    setShowCalendar,
+    selectedTags,
+    setSelectedTags,
+    allTags,
+    customTagColors,
+    columnOrder,
+    
+    // Actions
+    handleSort,
+    getSortIcon,
+    sortContacts,
+    sortCompanies,
+    filterContacts,
+    filterCompanies,
+    updateAllTags,
+    saveCustomTagColors,
+    saveViewType,
+    saveCurrentView,
+    saveColumnOrder,
+  };
+}; 

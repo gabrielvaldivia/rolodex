@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { db } from '@/lib/firebase'
 import { doc, setDoc, Timestamp } from 'firebase/firestore'
-import { Contact, fetchGoogleContacts } from '@/lib/contacts'
+import { Contact, fetchGoogleContacts } from '@/lib/google-api'
 import { refreshTokenInAPI } from '@/lib/auth'
 
 interface CachedContacts {
