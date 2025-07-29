@@ -11,6 +11,9 @@ export interface Contact {
   lastEmailPreview?: string
   lastMeetingName?: string
   photoUrl?: string
+  hidden?: boolean
+  starred?: boolean
+  tags?: string[]
 }
 
 // Helper functions for extracting data from email headers
@@ -167,7 +170,10 @@ export async function fetchGmailContacts(auth: InstanceType<typeof google.auth.O
                   lastContact: parsedDate.toISOString(),
                   source: 'Gmail',
                   lastEmailSubject: subject,
-                  lastEmailPreview: preview
+                  lastEmailPreview: preview,
+                  hidden: false,
+                  starred: false,
+                  tags: []
                 }
                 
                 // Track this as a received email in the thread
@@ -199,7 +205,10 @@ export async function fetchGmailContacts(auth: InstanceType<typeof google.auth.O
                       lastContact: parsedDate.toISOString(),
                       source: 'Gmail',
                       lastEmailSubject: subject,
-                      lastEmailPreview: preview
+                      lastEmailPreview: preview,
+                      hidden: false,
+                      starred: false,
+                      tags: []
                     }
                     
                     // Track this as a sent email in the thread
@@ -344,7 +353,10 @@ export async function fetchCalendarContacts(auth: InstanceType<typeof google.aut
               company: extractCompanyFromEmail(event.organizer.email),
               lastContact: parsedDate.toISOString(),
               source: 'Calendar',
-              lastMeetingName: event.summary || 'Meeting'
+              lastMeetingName: event.summary || 'Meeting',
+              hidden: false,
+              starred: false,
+              tags: []
             }
             
             if (!calendarContacts.has(event.organizer.email) || new Date(contact.lastContact) > new Date(calendarContacts.get(event.organizer.email)!.lastContact)) {
@@ -363,7 +375,10 @@ export async function fetchCalendarContacts(auth: InstanceType<typeof google.aut
               company: extractCompanyFromEmail(event.creator.email),
               lastContact: parsedDate.toISOString(),
               source: 'Calendar',
-              lastMeetingName: event.summary || 'Meeting'
+              lastMeetingName: event.summary || 'Meeting',
+              hidden: false,
+              starred: false,
+              tags: []
             }
             
             if (!calendarContacts.has(event.creator.email) || new Date(contact.lastContact) > new Date(calendarContacts.get(event.creator.email)!.lastContact)) {
@@ -523,7 +538,9 @@ export async function fetchGoogleContacts(auth: InstanceType<typeof google.auth.
           ...(new Date(contact.lastContact) > new Date(existing.lastContact) && {
             lastMeetingName: contact.lastMeetingName,
             source: contact.source
-          })
+          }),
+          // Ensure tags are preserved
+          tags: existing.tags || []
         }
         
         contactsMap.set(contact.email, mergedContact)

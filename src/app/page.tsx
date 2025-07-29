@@ -133,6 +133,7 @@ export default function Home() {
   const [editedContact, setEditedContact] = useState<Contact | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
+  const [editingCompany, setEditingCompany] = useState(false);
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaveError, setLastSaveError] = useState<string | null>(null);
@@ -236,6 +237,7 @@ export default function Home() {
     setEditedContact(null);
     setEditingName(false);
     setEditingEmail(false);
+    setEditingCompany(false);
     setSaveTimeout(null);
     setLastSaveError(null);
     setIsSaving(false);
@@ -1082,69 +1084,79 @@ export default function Home() {
                     ) : (
                       <button
                         onClick={() => setEditingName(true)}
-                        className="text-lg font-semibold hover:bg-muted/50 px-2 py-1 rounded -ml-2 text-left w-full"
+                        className="text-lg font-semibold px-2 py-1 rounded -ml-2 text-left w-full"
                       >
                         {editedContact.name}
                       </button>
                     )}
+                    <div>
+                      {editingEmail ? (
+                        <Input
+                          value={editedContact.email}
+                          onChange={(e) => {
+                            setEditedContact({
+                              ...editedContact,
+                              email: e.target.value,
+                            });
+                            saveContactDebounced({
+                              ...editedContact,
+                              email: e.target.value,
+                            });
+                          }}
+                          onBlur={() => setEditingEmail(false)}
+                          className="text-sm"
+                          autoFocus
+                        />
+                      ) : (
+                        <button
+                          onClick={() => setEditingEmail(true)}
+                          className="text-sm text-muted-foreground font-normal px-2 py-1 rounded -ml-2"
+                        >
+                          {editedContact.email}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </SheetTitle>
-                <SheetDescription>
-                  {editingEmail ? (
-                    <Input
-                      value={editedContact.email}
-                      onChange={(e) => {
-                        setEditedContact({
-                          ...editedContact,
-                          email: e.target.value,
-                        });
-                        saveContactDebounced({
-                          ...editedContact,
-                          email: e.target.value,
-                        });
-                      }}
-                      onBlur={() => setEditingEmail(false)}
-                      className="text-sm"
-                      autoFocus
-                    />
-                  ) : (
-                    <button
-                      onClick={() => setEditingEmail(true)}
-                      className="text-sm text-muted-foreground hover:bg-muted/50 px-2 py-1 rounded -ml-2"
-                    >
-                      {editedContact.email}
-                    </button>
-                  )}
-                </SheetDescription>
               </SheetHeader>
 
-              {/* Quick Actions */}
+              {/* Action Buttons */}
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => openGmail(selectedContact)}
+                  onClick={() => {
+                    setEditedContact({
+                      ...editedContact,
+                      starred: !editedContact.starred,
+                    });
+                    saveContactDebounced({
+                      ...editedContact,
+                      starred: !editedContact.starred,
+                    });
+                  }}
                   className="flex-1"
                 >
-                  <img
-                    src="/icons/gmail.png"
-                    alt="Gmail"
-                    className="h-4 w-4 mr-2"
-                  />
-                  Gmail
+                  <Star className="h-4 w-4 mr-2" />
+                  {editedContact.starred ? "Unstar" : "Star"}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => openCalendar(selectedContact)}
+                  onClick={() => {
+                    setEditedContact({
+                      ...editedContact,
+                      hidden: !editedContact.hidden,
+                    });
+                    saveContactDebounced({
+                      ...editedContact,
+                      hidden: !editedContact.hidden,
+                    });
+                  }}
                   className="flex-1"
                 >
-                  <img
-                    src="/icons/calendar.png"
-                    alt="Calendar"
-                    className="h-4 w-4 mr-2"
-                  />
-                  Calendar
+                  <Eye className="h-4 w-4 mr-2" />
+                  {editedContact.hidden ? "Show" : "Hide"}
                 </Button>
               </div>
 
@@ -1152,48 +1164,41 @@ export default function Home() {
               <div className="space-y-4">
                 <div>
                   <Label className="text-sm font-medium">Company</Label>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    {selectedContact.company || "—"}
+                  <div className="mt-2 relative">
+                    <Input
+                      value={editedContact.company || ""}
+                      onChange={(e) => {
+                        setEditedContact({
+                          ...editedContact,
+                          company: e.target.value,
+                        });
+                        saveContactDebounced({
+                          ...editedContact,
+                          company: e.target.value,
+                        });
+                      }}
+                      placeholder="Enter company name..."
+                      className="text-sm pr-8"
+                    />
+                    {editedContact.company && (
+                      <button
+                        onClick={() => {
+                          setEditedContact({
+                            ...editedContact,
+                            company: "",
+                          });
+                          saveContactDebounced({
+                            ...editedContact,
+                            company: "",
+                          });
+                        }}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                <div>
-                  <Label className="text-sm font-medium">Last Contact</Label>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    {formatRegularDate(selectedContact.lastContact)}
-                  </div>
-                </div>
-
-                {selectedContact.lastEmailSubject && (
-                  <div>
-                    <Label className="text-sm font-medium">
-                      Last Email Subject
-                    </Label>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {selectedContact.lastEmailSubject}
-                    </div>
-                  </div>
-                )}
-
-                {selectedContact.lastEmailPreview && (
-                  <div>
-                    <Label className="text-sm font-medium">
-                      Last Email Preview
-                    </Label>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      <EmailText content={selectedContact.lastEmailPreview} />
-                    </div>
-                  </div>
-                )}
-
-                {selectedContact.lastMeetingName && (
-                  <div>
-                    <Label className="text-sm font-medium">Last Meeting</Label>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {selectedContact.lastMeetingName}
-                    </div>
-                  </div>
-                )}
 
                 <div>
                   <Label className="text-sm font-medium">Tags</Label>
@@ -1216,44 +1221,50 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="hidden"
-                      checked={editedContact.hidden || false}
-                      onCheckedChange={(checked) => {
-                        setEditedContact({
-                          ...editedContact,
-                          hidden: checked,
-                        });
-                        saveContactDebounced({
-                          ...editedContact,
-                          hidden: checked,
-                        });
-                      }}
-                    />
-                    <Label htmlFor="hidden" className="text-sm">
-                      Hidden
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="starred"
-                      checked={editedContact.starred || false}
-                      onCheckedChange={(checked) => {
-                        setEditedContact({
-                          ...editedContact,
-                          starred: checked,
-                        });
-                        saveContactDebounced({
-                          ...editedContact,
-                          starred: checked,
-                        });
-                      }}
-                    />
-                    <Label htmlFor="starred" className="text-sm">
-                      Starred
-                    </Label>
+                <div>
+                  <Label className="text-sm font-medium">Last Contact</Label>
+                  <div className="mt-2 p-3 bg-muted/50 rounded-md border">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">
+                        {formatRegularDate(selectedContact.lastContact)}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {selectedContact.lastEmailSubject && (
+                          <button
+                            onClick={() => openGmail(selectedContact)}
+                            className="hover:opacity-70"
+                          >
+                            <img
+                              src="/icons/gmail.png"
+                              alt="Gmail"
+                              className="h-4 w-4"
+                            />
+                          </button>
+                        )}
+                        {selectedContact.lastMeetingName && (
+                          <button
+                            onClick={() => openCalendar(selectedContact)}
+                            className="hover:opacity-70"
+                          >
+                            <img
+                              src="/icons/calendar.png"
+                              alt="Calendar"
+                              className="h-4 w-4"
+                            />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {selectedContact.lastEmailSubject && (
+                      <div className="text-sm font-medium mt-2">
+                        {selectedContact.lastEmailSubject}
+                      </div>
+                    )}
+                    {selectedContact.lastEmailPreview && (
+                      <div className="text-sm text-muted-foreground mt-3">
+                        <EmailText content={selectedContact.lastEmailPreview} />
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
