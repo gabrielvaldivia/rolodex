@@ -29,24 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Settings,
-  RefreshCw,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  X,
-  SlidersHorizontal,
-  Check,
-  Star,
-  Tag,
-  Plus,
-  Edit,
-  Palette,
-  Pencil,
-  TableProperties,
-  LayoutGrid,
-} from "lucide-react";
+import { ExternalLink, Plus, Edit, Palette, Pencil } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { RichText } from "@/components/RichText";
@@ -57,6 +40,9 @@ import { ContactAvatar } from "@/components/ContactAvatar";
 import TagInput from "@/components/TagInput";
 import TagDisplay from "@/components/TagDisplay";
 import KanbanBoard from "@/components/KanbanBoard";
+import ContactDetailSheet from "@/components/ContactDetailSheet";
+import CompanyDetailSheet from "@/components/CompanyDetailSheet";
+import HeaderControls from "@/components/HeaderControls";
 import { useContacts } from "@/hooks/useContacts";
 import { useFilters } from "@/hooks/useFilters";
 import { groupContactsByCompany } from "@/lib/contacts";
@@ -131,9 +117,6 @@ export default function Home() {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [editedContact, setEditedContact] = useState<Contact | null>(null);
-  const [editingName, setEditingName] = useState(false);
-  const [editingEmail, setEditingEmail] = useState(false);
-  const [editingCompany, setEditingCompany] = useState(false);
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaveError, setLastSaveError] = useState<string | null>(null);
@@ -164,8 +147,6 @@ export default function Home() {
   const handleContactClick = (contact: Contact) => {
     setSelectedContact(contact);
     setEditedContact({ ...contact });
-    setEditingName(false);
-    setEditingEmail(false);
     setLastSaveError(null);
     setIsSaving(false);
     setIsSheetOpen(true);
@@ -235,9 +216,6 @@ export default function Home() {
     setIsSheetOpen(false);
     setSelectedContact(null);
     setEditedContact(null);
-    setEditingName(false);
-    setEditingEmail(false);
-    setEditingCompany(false);
     setSaveTimeout(null);
     setLastSaveError(null);
     setIsSaving(false);
@@ -422,7 +400,7 @@ export default function Home() {
     );
   }
 
-  if (session && contacts.length === 0) {
+  if (session && contacts.length === 0 && loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -454,308 +432,32 @@ export default function Home() {
   return (
     <div className="min-h-screen py-8">
       <div className="">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8 px-8">
-          <div className="flex items-center gap-4">
-            {/* Fresh data indicator */}
-            {freshDataLoaded && (
-              <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-200">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                Fresh data loaded
-              </div>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="h-auto p-0 text-2xl font-medium hover:bg-transparent"
-                >
-                  {currentView === "contacts"
-                    ? `${filteredContacts.length} Contacts`
-                    : `${filteredCompanies.length} Companies`}
-                  <svg
-                    className="ml-1 h-5 w-5 text-muted-foreground"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-48">
-                <DropdownMenuItem
-                  onClick={() => saveCurrentView("contacts")}
-                  className={`cursor-pointer ${
-                    currentView === "contacts" ? "bg-muted" : ""
-                  }`}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <span>Contacts</span>
-                    {currentView === "contacts" && (
-                      <Check className="h-4 w-4" />
-                    )}
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => saveCurrentView("companies")}
-                  className={`cursor-pointer ${
-                    currentView === "companies" ? "bg-muted" : ""
-                  }`}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <span>Companies</span>
-                    {currentView === "companies" && (
-                      <Check className="h-4 w-4" />
-                    )}
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 min-w-0">
-              <Input
-                placeholder={currentView === "contacts" ? "Search" : "Search"}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-8 pr-8 text-sm md:text-sm"
-              />
-              {searchTerm && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-8 w-8 p-0 hover:bg-transparent"
-                  onClick={() => setSearchTerm("")}
-                >
-                  <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                </Button>
-              )}
-            </div>
-            {/* View Type Toggle */}
-            <div className="flex items-center gap-0.5 bg-muted p-0.5 rounded-lg h-8">
-              <button
-                onClick={() => saveViewType("table")}
-                className={`px-2 py-1 transition-colors h-7 flex items-center ${
-                  viewType === "table"
-                    ? "bg-background text-foreground shadow-sm rounded-md"
-                    : "text-muted-foreground hover:text-foreground rounded"
-                }`}
-                title="Table view"
-              >
-                <TableProperties className="h-3 w-3" />
-              </button>
-              <button
-                onClick={() => saveViewType("kanban")}
-                className={`px-2 py-1 transition-colors h-7 flex items-center ${
-                  viewType === "kanban"
-                    ? "bg-background text-foreground shadow-sm rounded-md"
-                    : "text-muted-foreground hover:text-foreground rounded"
-                }`}
-                title="Kanban view"
-              >
-                <LayoutGrid className="h-3 w-3" />
-              </button>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={`relative ${
-                    !showGmail ||
-                    !showCalendar ||
-                    showHidden ||
-                    showStarred ||
-                    selectedTags.length > 0
-                      ? "border-blue-500 bg-blue-50 hover:bg-blue-100"
-                      : ""
-                  }`}
-                >
-                  <SlidersHorizontal className="h-4 w-4" />
-                  {(!showGmail ||
-                    !showCalendar ||
-                    showHidden ||
-                    showStarred ||
-                    selectedTags.length > 0) && (
-                    <span className="absolute -top-1 -right-1 h-2 w-2 bg-blue-500 rounded-full"></span>
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                {/* Tag filter section */}
-                {allTags.length > 0 && (
-                  <>
-                    <DropdownMenuLabel className="flex items-center gap-2">
-                      <Tag className="h-4 w-4" />
-                      Filter by tags
-                      {selectedTags.length > 0 && (
-                        <button
-                          onClick={() => setSelectedTags([])}
-                          className="ml-auto text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          Clear all
-                        </button>
-                      )}
-                    </DropdownMenuLabel>
-                    <div className="py-1 max-h-32 overflow-y-auto">
-                      <div className="space-y-1">
-                        {allTags.slice(0, 8).map((tag) => {
-                          const colors = getTagColor(tag, customTagColors);
-                          return (
-                            <DropdownMenuItem
-                              key={tag}
-                              onSelect={(e) => e.preventDefault()}
-                              onClick={() => {
-                                if (selectedTags.includes(tag)) {
-                                  setSelectedTags(
-                                    selectedTags.filter((t) => t !== tag)
-                                  );
-                                } else {
-                                  setSelectedTags([...selectedTags, tag]);
-                                }
-                              }}
-                              className="flex items-center gap-2 cursor-pointer text-xs"
-                            >
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className={`flex items-center justify-center w-4 h-4 rounded-sm border-2 ${
-                                    selectedTags.includes(tag)
-                                      ? "bg-primary border-primary"
-                                      : "border-muted-foreground/30"
-                                  }`}
-                                >
-                                  {selectedTags.includes(tag) && (
-                                    <Check className="h-3 w-3 text-primary-foreground" />
-                                  )}
-                                </div>
-                                <span
-                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${colors.bg} ${colors.text}`}
-                                >
-                                  <span className="truncate">{tag}</span>
-                                </span>
-                              </div>
-                            </DropdownMenuItem>
-                          );
-                        })}
-
-                        {/* No Tags option */}
-                        <DropdownMenuItem
-                          onSelect={(e) => e.preventDefault()}
-                          onClick={() => {
-                            const noTagsFilter = "No Tags";
-                            if (selectedTags.includes(noTagsFilter)) {
-                              setSelectedTags(
-                                selectedTags.filter((t) => t !== noTagsFilter)
-                              );
-                            } else {
-                              setSelectedTags([...selectedTags, noTagsFilter]);
-                            }
-                          }}
-                          className="flex items-center gap-2 cursor-pointer text-xs"
-                        >
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={`flex items-center justify-center w-4 h-4 rounded-sm border-2 ${
-                                selectedTags.includes("No Tags")
-                                  ? "bg-primary border-primary"
-                                  : "border-muted-foreground/30"
-                              }`}
-                            >
-                              {selectedTags.includes("No Tags") && (
-                                <Check className="h-3 w-3 text-primary-foreground" />
-                              )}
-                            </div>
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded bg-gray-100 text-gray-800">
-                              <span className="truncate">No Tags</span>
-                            </span>
-                          </div>
-                        </DropdownMenuItem>
-                        {allTags.length > 8 && (
-                          <div className="text-xs text-muted-foreground px-2 py-1">
-                            +{allTags.length - 8} more tags available
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={(e) => e.preventDefault()}
-                  onClick={() => setShowGmail(!showGmail)}
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  <img src="/icons/gmail.png" alt="Gmail" className="h-4 w-4" />
-                  <span>Gmail</span>
-                  {showGmail && <Check className="h-4 w-4 ml-auto" />}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => e.preventDefault()}
-                  onClick={() => setShowCalendar(!showCalendar)}
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  <img
-                    src="/icons/calendar.png"
-                    alt="Calendar"
-                    className="h-4 w-4"
-                  />
-                  <span>Calendar</span>
-                  {showCalendar && <Check className="h-4 w-4 ml-auto" />}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => e.preventDefault()}
-                  onClick={() => setShowStarred(!showStarred)}
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  <Star className="h-4 w-4" />
-                  <span>Starred</span>
-                  {showStarred && <Check className="h-4 w-4 ml-auto" />}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => e.preventDefault()}
-                  onClick={() => setShowHidden(!showHidden)}
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  {showHidden ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                  <span>Hidden</span>
-                  {showHidden && <Check className="h-4 w-4 ml-auto" />}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                fetchContacts(true);
-              }}
-              variant="outline"
-              size="sm"
-              disabled={loading || backgroundSyncing}
-              type="button"
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${backgroundSyncing ? "animate-spin" : ""}`}
-              />
-            </Button>
-            <Button
-              onClick={() => router.push("/settings")}
-              variant="outline"
-              size="sm"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        <HeaderControls
+          currentView={currentView}
+          viewType={viewType}
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          saveCurrentView={saveCurrentView}
+          saveViewType={saveViewType}
+          showGmail={showGmail}
+          setShowGmail={setShowGmail}
+          showCalendar={showCalendar}
+          setShowCalendar={setShowCalendar}
+          showStarred={showStarred}
+          setShowStarred={setShowStarred}
+          showHidden={showHidden}
+          setShowHidden={setShowHidden}
+          selectedTags={selectedTags}
+          setSelectedTags={setSelectedTags}
+          allTags={allTags}
+          customTagColors={customTagColors}
+          filteredContacts={filteredContacts}
+          filteredCompanies={filteredCompanies}
+          loading={loading}
+          backgroundSyncing={backgroundSyncing}
+          fetchContacts={fetchContacts}
+          onSettingsClick={() => router.push("/settings")}
+        />
 
         {loading ? (
           <div className="text-center py-8 px-8">
@@ -1056,347 +758,41 @@ export default function Home() {
       </div>
 
       {/* Contact Detail Sheet */}
-      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent className="w-[400px] sm:w-[540px]">
-          {selectedContact && editedContact && (
-            <div className="space-y-6">
-              <SheetHeader>
-                <SheetTitle className="flex items-center gap-3">
-                  <ContactAvatar contact={selectedContact} size="lg" />
-                  <div className="flex-1 min-w-0">
-                    {editingName ? (
-                      <Input
-                        value={editedContact.name}
-                        onChange={(e) => {
-                          setEditedContact({
-                            ...editedContact,
-                            name: e.target.value,
-                          });
-                          saveContactDebounced({
-                            ...editedContact,
-                            name: e.target.value,
-                          });
-                        }}
-                        onBlur={() => setEditingName(false)}
-                        className="text-lg font-semibold"
-                        autoFocus
-                      />
-                    ) : (
-                      <button
-                        onClick={() => setEditingName(true)}
-                        className="text-lg font-semibold px-2 py-1 rounded -ml-2 text-left w-full"
-                      >
-                        {editedContact.name}
-                      </button>
-                    )}
-                    <div>
-                      {editingEmail ? (
-                        <Input
-                          value={editedContact.email}
-                          onChange={(e) => {
-                            setEditedContact({
-                              ...editedContact,
-                              email: e.target.value,
-                            });
-                            saveContactDebounced({
-                              ...editedContact,
-                              email: e.target.value,
-                            });
-                          }}
-                          onBlur={() => setEditingEmail(false)}
-                          className="text-sm"
-                          autoFocus
-                        />
-                      ) : (
-                        <button
-                          onClick={() => setEditingEmail(true)}
-                          className="text-sm text-muted-foreground font-normal px-2 py-1 rounded -ml-2"
-                        >
-                          {editedContact.email}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </SheetTitle>
-              </SheetHeader>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEditedContact({
-                      ...editedContact,
-                      starred: !editedContact.starred,
-                    });
-                    saveContactDebounced({
-                      ...editedContact,
-                      starred: !editedContact.starred,
-                    });
-                  }}
-                  className="flex-1"
-                >
-                  <Star className="h-4 w-4 mr-2" />
-                  {editedContact.starred ? "Unstar" : "Star"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEditedContact({
-                      ...editedContact,
-                      hidden: !editedContact.hidden,
-                    });
-                    saveContactDebounced({
-                      ...editedContact,
-                      hidden: !editedContact.hidden,
-                    });
-                  }}
-                  className="flex-1"
-                >
-                  <Eye className="h-4 w-4 mr-2" />
-                  {editedContact.hidden ? "Show" : "Hide"}
-                </Button>
-              </div>
-
-              {/* Contact Details */}
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-sm font-medium">Company</Label>
-                  <div className="mt-2 relative">
-                    <Input
-                      value={editedContact.company || ""}
-                      onChange={(e) => {
-                        setEditedContact({
-                          ...editedContact,
-                          company: e.target.value,
-                        });
-                        saveContactDebounced({
-                          ...editedContact,
-                          company: e.target.value,
-                        });
-                      }}
-                      placeholder="Enter company name..."
-                      className="text-sm pr-8"
-                    />
-                    {editedContact.company && (
-                      <button
-                        onClick={() => {
-                          setEditedContact({
-                            ...editedContact,
-                            company: "",
-                          });
-                          saveContactDebounced({
-                            ...editedContact,
-                            company: "",
-                          });
-                        }}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium">Tags</Label>
-                  <div className="mt-2">
-                    <TagInput
-                      tags={editedContact.tags || []}
-                      onTagsChange={(tags) => {
-                        setEditedContact({
-                          ...editedContact,
-                          tags: tags,
-                        });
-                        saveContactDebounced({
-                          ...editedContact,
-                          tags: tags,
-                        });
-                      }}
-                      suggestions={allTags}
-                      customColors={customTagColors}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium">Last Contact</Label>
-                  <div className="mt-2 p-3 bg-muted/50 rounded-md border">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        {formatRegularDate(selectedContact.lastContact)}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {selectedContact.lastEmailSubject && (
-                          <button
-                            onClick={() => openGmail(selectedContact)}
-                            className="hover:opacity-70"
-                          >
-                            <img
-                              src="/icons/gmail.png"
-                              alt="Gmail"
-                              className="h-4 w-4"
-                            />
-                          </button>
-                        )}
-                        {selectedContact.lastMeetingName && (
-                          <button
-                            onClick={() => openCalendar(selectedContact)}
-                            className="hover:opacity-70"
-                          >
-                            <img
-                              src="/icons/calendar.png"
-                              alt="Calendar"
-                              className="h-4 w-4"
-                            />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {selectedContact.lastEmailSubject && (
-                      <div className="text-sm font-medium mt-2">
-                        {selectedContact.lastEmailSubject}
-                      </div>
-                    )}
-                    {selectedContact.lastEmailPreview && (
-                      <div className="text-sm text-muted-foreground mt-3">
-                        <EmailText content={selectedContact.lastEmailPreview} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Save Status */}
-              {isSaving && (
-                <div className="text-sm text-blue-600">Saving changes...</div>
-              )}
-              {lastSaveError && (
-                <div className="text-sm text-red-600">
-                  Error: {lastSaveError}
-                </div>
-              )}
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      <ContactDetailSheet
+        selectedContact={selectedContact}
+        editedContact={editedContact}
+        isSheetOpen={isSheetOpen}
+        onSheetOpenChange={setIsSheetOpen}
+        onContactUpdate={saveContactDebounced}
+        allTags={allTags}
+        customTagColors={customTagColors}
+        isSaving={isSaving}
+        lastSaveError={lastSaveError}
+      />
 
       {/* Company Detail Sheet */}
-      <Sheet open={isCompanySheetOpen} onOpenChange={setIsCompanySheetOpen}>
-        <SheetContent className="w-[400px] sm:w-[540px]">
-          {selectedCompany && (
-            <div className="space-y-6">
-              <SheetHeader>
-                <SheetTitle className="text-lg font-semibold">
-                  {selectedCompany.name}
-                </SheetTitle>
-                <SheetDescription>
-                  {selectedCompany.contactCount} contact
-                  {selectedCompany.contactCount !== 1 ? "s" : ""}
-                </SheetDescription>
-              </SheetHeader>
-
-              {/* Company Details */}
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-sm font-medium">Last Contact</Label>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    {formatRegularDate(selectedCompany.lastContact)}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium">Tags</Label>
-                  <div className="mt-2">
-                    <TagInput
-                      tags={selectedCompany.tags || []}
-                      onTagsChange={(tags) => {
-                        // Update all contacts in the company
-                        const updatedContacts = contacts.map((contact) =>
-                          contact.company === selectedCompany.name
-                            ? { ...contact, tags: tags }
-                            : contact
-                        );
-                        setContacts(updatedContacts);
-                      }}
-                      suggestions={allTags}
-                      customColors={customTagColors}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="company-hidden"
-                      checked={selectedCompany.hidden || false}
-                      onCheckedChange={(checked) => {
-                        // Update all contacts in the company
-                        const updatedContacts = contacts.map((contact) =>
-                          contact.company === selectedCompany.name
-                            ? { ...contact, hidden: checked }
-                            : contact
-                        );
-                        setContacts(updatedContacts);
-                      }}
-                    />
-                    <Label htmlFor="company-hidden" className="text-sm">
-                      Hidden
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="company-starred"
-                      checked={selectedCompany.starred || false}
-                      onCheckedChange={(checked) => {
-                        // Update all contacts in the company
-                        const updatedContacts = contacts.map((contact) =>
-                          contact.company === selectedCompany.name
-                            ? { ...contact, starred: checked }
-                            : contact
-                        );
-                        setContacts(updatedContacts);
-                      }}
-                    />
-                    <Label htmlFor="company-starred" className="text-sm">
-                      Starred
-                    </Label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Company Contacts */}
-              <div>
-                <Label className="text-sm font-medium">Contacts</Label>
-                <div className="mt-2 space-y-2">
-                  {selectedCompany.contacts.map((contact) => (
-                    <div
-                      key={contact.id}
-                      className="flex items-center gap-3 p-2 rounded-md border cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleContactClick(contact)}
-                    >
-                      <ContactAvatar contact={contact} size="sm" />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">
-                          {contact.name}
-                        </div>
-                        <div className="text-xs text-muted-foreground truncate">
-                          {contact.email}
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatRelativeDate(contact.lastContact)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      <CompanyDetailSheet
+        selectedCompany={selectedCompany}
+        isSheetOpen={isCompanySheetOpen}
+        onSheetOpenChange={setIsCompanySheetOpen}
+        onCompanyUpdate={(updatedCompany) => {
+          // Update all contacts in the company
+          const updatedContacts = contacts.map((contact) =>
+            contact.company === updatedCompany.name
+              ? {
+                  ...contact,
+                  tags: updatedCompany.tags,
+                  hidden: updatedCompany.hidden,
+                  starred: updatedCompany.starred,
+                }
+              : contact
+          );
+          setContacts(updatedContacts);
+        }}
+        onContactClick={handleContactClick}
+        allTags={allTags}
+        customTagColors={customTagColors}
+      />
     </div>
   );
 }

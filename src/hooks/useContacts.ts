@@ -167,14 +167,22 @@ export const useContacts = () => {
       console.log("🚀 Showing cached contacts immediately");
       setContacts(cachedContacts);
       setCachedContacts(cachedContacts);
+      
+      // Then fetch fresh data in the background (only if we have a session)
+      if (session) {
+        console.log("🔄 Fetching fresh contacts from backend");
+        // Use a small delay to ensure cached contacts are displayed first
+        setTimeout(() => {
+          fetchContacts(true); // background = true
+        }, 100);
+      }
     } else {
       console.log("📭 No cached contacts available, will show loading state");
-    }
-
-    // Then fetch fresh data in the background (only if we have a session)
-    if (session) {
-      console.log("🔄 Fetching fresh contacts from backend");
-      fetchContacts(true); // background = true
+      // If no cached contacts, fetch immediately (not in background)
+      if (session) {
+        console.log("🔄 Fetching contacts immediately (no cache)");
+        fetchContacts(false); // not background = false
+      }
     }
   };
 
