@@ -1,194 +1,135 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
-
-interface ExtendedSession {
-  accessToken?: string;
-  error?: string;
-  user?: {
-    email?: string;
-    name?: string;
-    image?: string;
-  };
-}
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 export default function DebugPage() {
   const { data: session, status } = useSession();
-  const [envCheck, setEnvCheck] = useState<Record<string, boolean>>({});
-  const [apiTest, setApiTest] = useState<string>("");
-  const [cacheInfo, setCacheInfo] = useState<string>("");
+  const [testResult, setTestResult] = useState<string>("");
 
-  // Check cache status
-  const checkCache = () => {
-    try {
-      const cached = localStorage.getItem("rolodex-contacts-cache");
-      const timestamp = localStorage.getItem(
-        "rolodex-contacts-cache-timestamp"
-      );
+  const testAuth = async () => {
+    if (!session) return;
 
-      if (!cached || !timestamp) {
-        setCacheInfo("No cached contacts found");
-        return;
-      }
-
-      const contacts = JSON.parse(cached);
-      const cacheAge = Date.now() - parseInt(timestamp);
-      const ageHours = Math.round(cacheAge / (1000 * 60 * 60));
-
-      setCacheInfo(
-        `Cached ${contacts.length} contacts (${ageHours} hours old)`
-      );
-    } catch (error) {
-      setCacheInfo(`Error reading cache: ${error}`);
-    }
-  };
-
-  // Clear cache
-  const clearCache = () => {
-    try {
-      localStorage.removeItem("rolodex-contacts-cache");
-      localStorage.removeItem("rolodex-contacts-cache-timestamp");
-      setCacheInfo("Cache cleared");
-    } catch (error) {
-      setCacheInfo(`Error clearing cache: ${error}`);
-    }
-  };
-
-  useEffect(() => {
-    // Check environment variables (client-side won't see server vars, but we can test endpoints)
-    const checkEnv = {
-      hasNextAuthUrl: !!process.env.NEXTAUTH_URL,
-      hasGoogleClientId: !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+    const sessionWithToken = session as {
+      accessToken?: string;
+      error?: string;
+      refreshToken?: string;
     };
-    setEnvCheck(checkEnv);
 
-    // Test API endpoint
-    fetch("/api/test")
-      .then((res) => (res.ok ? res.text() : Promise.reject(res.status)))
-      .then((data) => setApiTest(`✅ API working: ${data}`))
-      .catch((err) => setApiTest(`❌ API failed: ${err}`));
+    setTestResult("Testing authentication...");
 
-    // Check cache status on mount
-    checkCache();
-  }, []);
+    try {
+      const response = await fetch("/api/contacts/refresh", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionWithToken.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          refreshToken: sessionWithToken.refreshToken,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setTestResult(`✅ Success! Found ${data.contactsCount} contacts`);
+      } else {
+        setTestResult(`❌ Error: ${data.error}`);
+      }
+    } catch (error) {
+      setTestResult(`❌ Network error: ${error}`);
+    }
+  };
+
+  const testGmailAPI = async () => {
+    if (!session) return;
+
+    const sessionWithToken = session as {
+      accessToken?: string;
+      error?: string;
+      refreshToken?: string;
+    };
+
+    setTestResult("Testing Gmail API directly...");
+
+    try {
+      const response = await fetch(
+        "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+        {
+          headers: {
+            Authorization: `Bearer ${sessionWithToken.accessToken}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setTestResult(`✅ Gmail API works! Email: ${data.emailAddress}`);
+      } else {
+        const errorData = await response.json();
+        setTestResult(
+          `❌ Gmail API error: ${
+            errorData.error?.message || response.statusText
+          }`
+        );
+      }
+    } catch (error) {
+      setTestResult(`❌ Network error: ${error}`);
+    }
+  };
+
+  if (status === "loading") {
+    return <div>Loading...</div>;
+  }
+
+  if (!session) {
+    return <div>Please sign in first</div>;
+  }
+
+  const sessionWithToken = session as {
+    accessToken?: string;
+    error?: string;
+    refreshToken?: string;
+  };
 
   return (
-    <div className="min-h-screen p-8 space-y-6">
-      <h1 className="text-2xl font-bold">Rolodex Debug Page</h1>
+    <div className="p-8 space-y-6">
+      <h1 className="text-2xl font-bold">Authentication Debug</h1>
 
       <div className="space-y-4">
-        <div className="border p-4 rounded">
-          <h2 className="font-semibold mb-2">Authentication Status</h2>
-          <p>
-            <strong>Status:</strong> {status}
-          </p>
-          <p>
-            <strong>Session:</strong>{" "}
-            {session ? "✅ Authenticated" : "❌ Not authenticated"}
-          </p>
-          {session && (
-            <div>
-              <p>
-                <strong>User:</strong> {session.user?.email}
-              </p>
-              <p>
-                <strong>Access Token:</strong>{" "}
-                {(session as ExtendedSession).accessToken
-                  ? "✅ Present"
-                  : "❌ Missing"}
-              </p>
-              <p>
-                <strong>Error:</strong>{" "}
-                {(session as ExtendedSession).error || "None"}
-              </p>
-            </div>
-          )}
+        <div>
+          <h2 className="text-lg font-semibold">Session Info</h2>
+          <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto">
+            {JSON.stringify(
+              {
+                hasAccessToken: !!sessionWithToken.accessToken,
+                hasRefreshToken: !!sessionWithToken.refreshToken,
+                hasError: !!sessionWithToken.error,
+                accessTokenLength: sessionWithToken.accessToken?.length || 0,
+                refreshTokenLength: sessionWithToken.refreshToken?.length || 0,
+                error: sessionWithToken.error,
+              },
+              null,
+              2
+            )}
+          </pre>
         </div>
 
-        <div className="border p-4 rounded">
-          <h2 className="font-semibold mb-2">Environment Check</h2>
-          <p>
-            <strong>NEXTAUTH_URL:</strong>{" "}
-            {envCheck.hasNextAuthUrl ? "✅" : "❌"}
-          </p>
-          <p>
-            <strong>GOOGLE_CLIENT_ID:</strong>{" "}
-            {envCheck.hasGoogleClientId ? "✅" : "❌"}
-          </p>
+        <div className="space-y-2">
+          <Button onClick={testAuth}>Test Contacts API</Button>
+          <Button onClick={testGmailAPI} variant="outline">
+            Test Gmail API Directly
+          </Button>
         </div>
 
-        <div className="border p-4 rounded">
-          <h2 className="font-semibold mb-2">API Test</h2>
-          <p>{apiTest || "Testing..."}</p>
-        </div>
-
-        <div className="border p-4 rounded">
-          <h2 className="font-semibold mb-2">Browser Info</h2>
-          <p>
-            <strong>User Agent:</strong>{" "}
-            {typeof window !== "undefined"
-              ? navigator.userAgent
-              : "Server-side"}
-          </p>
-          <p>
-            <strong>Cookies Enabled:</strong>{" "}
-            {typeof window !== "undefined"
-              ? navigator.cookieEnabled
-                ? "✅"
-                : "❌"
-              : "Server-side"}
-          </p>
-          <p>
-            <strong>Local Storage:</strong>{" "}
-            {typeof Storage !== "undefined" ? "✅" : "❌"}
-          </p>
-        </div>
-
-        <div className="border p-4 rounded">
-          <h2 className="font-semibold mb-2">Console Errors</h2>
-          <p>
-            Check the browser console (F12 → Console tab) for any JavaScript
-            errors.
-          </p>
-          <p>Common issues: CORS errors, 404s, authentication failures</p>
-        </div>
-
-        <div className="border p-4 rounded">
-          <h2 className="font-semibold mb-2">Cache Management</h2>
-          <p className="mb-2">
-            {cacheInfo || "Click 'Check Cache' to see status"}
-          </p>
-          <div className="space-x-2">
-            <button
-              onClick={checkCache}
-              className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
-            >
-              Check Cache
-            </button>
-            <button
-              onClick={clearCache}
-              className="bg-red-500 text-white px-3 py-1 rounded text-sm"
-            >
-              Clear Cache
-            </button>
+        {testResult && (
+          <div className="p-4 bg-gray-100 rounded">
+            <h3 className="font-semibold">Test Result:</h3>
+            <p className="text-sm">{testResult}</p>
           </div>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <button
-          onClick={() => (window.location.href = "/")}
-          className="bg-blue-500 text-white px-4 py-2 rounded mr-4"
-        >
-          Back to Main Page
-        </button>
-        <button
-          onClick={() => window.location.reload()}
-          className="bg-gray-500 text-white px-4 py-2 rounded"
-        >
-          Refresh Page
-        </button>
+        )}
       </div>
     </div>
   );

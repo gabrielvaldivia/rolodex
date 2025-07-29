@@ -815,13 +815,16 @@ export default function Home() {
         if (edit) {
           return {
             ...contact,
-            name: edit.name || contact.name,
-            email: edit.email || contact.email,
-            company: edit.company || contact.company,
-            hidden: edit.hidden || contact.hidden,
-            starred: edit.starred || contact.starred,
-            tags: edit.tags || contact.tags,
-            photoUrl: edit.photoUrl || contact.photoUrl,
+            name: edit.name !== undefined ? edit.name : contact.name,
+            email: edit.email !== undefined ? edit.email : contact.email,
+            company:
+              edit.company !== undefined ? edit.company : contact.company,
+            hidden: edit.hidden !== undefined ? edit.hidden : contact.hidden,
+            starred:
+              edit.starred !== undefined ? edit.starred : contact.starred,
+            tags: edit.tags !== undefined ? edit.tags : contact.tags,
+            photoUrl:
+              edit.photoUrl !== undefined ? edit.photoUrl : contact.photoUrl,
           };
         }
         return contact;
@@ -1919,6 +1922,7 @@ export default function Home() {
       const sessionWithToken = session as {
         accessToken?: string;
         error?: string;
+        refreshToken?: string;
       };
 
       if (!sessionWithToken?.accessToken) {
@@ -1935,12 +1939,25 @@ export default function Home() {
       const endpoint = background ? "/api/contacts/refresh" : "/api/contacts";
       const method = background ? "POST" : "GET";
 
-      const response = await fetch(endpoint, {
+      const requestOptions: RequestInit = {
         method,
         headers: {
           Authorization: `Bearer ${sessionWithToken.accessToken}`,
         },
-      });
+      };
+
+      // For background refresh, include refresh token in body
+      if (background && sessionWithToken.refreshToken) {
+        requestOptions.body = JSON.stringify({
+          refreshToken: sessionWithToken.refreshToken,
+        });
+        requestOptions.headers = {
+          ...requestOptions.headers,
+          "Content-Type": "application/json",
+        };
+      }
+
+      const response = await fetch(endpoint, requestOptions);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -3442,26 +3459,46 @@ export default function Home() {
                   <Label htmlFor="company" className="text-sm font-medium">
                     Company
                   </Label>
-                  <Input
-                    id="company"
-                    value={editedContact.company || ""}
-                    onChange={(e) => {
-                      const updatedContact = {
-                        ...editedContact,
-                        company: e.target.value,
-                      };
-                      setEditedContact(updatedContact);
-                    }}
-                    onBlur={() => {
-                      saveContactDebounced(editedContact);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
+                  <div className="relative">
+                    <Input
+                      id="company"
+                      value={editedContact.company || ""}
+                      onChange={(e) => {
+                        const updatedContact = {
+                          ...editedContact,
+                          company: e.target.value,
+                        };
+                        setEditedContact(updatedContact);
+                      }}
+                      onBlur={() => {
                         saveContactDebounced(editedContact);
-                      }
-                    }}
-                    placeholder="Company name"
-                  />
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          saveContactDebounced(editedContact);
+                        }
+                      }}
+                      placeholder="Company name"
+                      className={editedContact.company ? "pr-8" : ""}
+                    />
+                    {editedContact.company && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updatedContact = {
+                            ...editedContact,
+                            company: "",
+                          };
+                          setEditedContact(updatedContact);
+                          saveContactDebounced(updatedContact);
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded transition-colors"
+                        title="Clear company"
+                      >
+                        <X className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">

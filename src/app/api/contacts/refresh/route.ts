@@ -3,6 +3,7 @@ import { google } from 'googleapis'
 import { db } from '@/lib/firebase'
 import { doc, setDoc, Timestamp } from 'firebase/firestore'
 import { Contact, fetchGoogleContacts } from '@/lib/contacts'
+import { refreshTokenInAPI } from '@/lib/auth'
 
 interface CachedContacts {
   contacts: Contact[]
@@ -49,6 +50,25 @@ export async function POST(request: NextRequest) {
     
     console.log('Background refresh: Starting contact refresh for user', userId)
     
+    // Get the request body to check for refresh token
+    const body = await request.json().catch(() => ({}))
+    const refreshToken = body.refreshToken
+    
+    let accessToken = token
+    
+    // If we have a refresh token, try to refresh the access token
+    if (refreshToken) {
+      console.log('Attempting to refresh access token...')
+      const refreshedTokens = await refreshTokenInAPI(refreshToken)
+      
+      if (refreshedTokens) {
+        accessToken = refreshedTokens.accessToken
+        console.log('Access token refreshed successfully')
+      } else {
+        console.log('Failed to refresh access token, using original token')
+      }
+    }
+    
     // Properly configure OAuth2 client
     const auth = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -56,7 +76,7 @@ export async function POST(request: NextRequest) {
       `${process.env.NEXTAUTH_URL}/api/auth/callback/google`
     )
     
-    auth.setCredentials({ access_token: token })
+    auth.setCredentials({ access_token: accessToken })
 
     // Fetch fresh contacts
     const contacts = await fetchGoogleContacts(auth)

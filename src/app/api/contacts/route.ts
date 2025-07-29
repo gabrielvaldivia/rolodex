@@ -3,6 +3,7 @@ import { google } from 'googleapis'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore'
 import { Contact, fetchGoogleContacts } from '@/lib/contacts'
+import { refreshTokenInAPI } from '@/lib/auth'
 
 interface CachedContacts {
   contacts: Contact[]
@@ -73,28 +74,6 @@ async function saveContactsToCache(userId: string, contacts: Contact[]): Promise
     console.error('Error saving to cache:', error)
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 export async function GET(request: NextRequest) {
   try {

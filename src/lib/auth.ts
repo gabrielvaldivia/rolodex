@@ -23,6 +23,7 @@ export const authConfig = {
         token.accessToken = account.access_token
         token.refreshToken = account.refresh_token
         token.accessTokenExpires = account.expires_at
+        token.refreshTokenExpires = account.refresh_token_expires_in
       }
       
       // Return previous token if the access token has not expired yet
@@ -38,14 +39,25 @@ export const authConfig = {
     async session({ session, token }: { session: any; token: any }) {
       session.accessToken = token.accessToken
       session.error = token.error
+      session.refreshToken = token.refreshToken
+      session.accessTokenExpires = token.accessTokenExpires
       return session
     }
+  },
+  session: {
+    strategy: 'jwt' as const,
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  jwt: {
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function refreshAccessToken(token: any) {
   try {
+    console.log('Attempting to refresh access token...')
+    
     const url = 'https://oauth2.googleapis.com/token'
     const response = await fetch(url, {
       method: 'POST',
@@ -63,9 +75,12 @@ async function refreshAccessToken(token: any) {
     const refreshedTokens = await response.json()
 
     if (!response.ok) {
+      console.error('Token refresh failed:', refreshedTokens)
       throw refreshedTokens
     }
 
+    console.log('Token refresh successful')
+    
     return {
       ...token,
       accessToken: refreshedTokens.access_token,
@@ -78,6 +93,44 @@ async function refreshAccessToken(token: any) {
       ...token,
       error: 'RefreshAccessTokenError',
     }
+  }
+}
+
+// Utility function to refresh tokens in API routes
+export async function refreshTokenInAPI(refreshToken: string): Promise<{ accessToken: string; expiresIn: number } | null> {
+  try {
+    console.log('Refreshing token in API route...')
+    
+    const url = 'https://oauth2.googleapis.com/token'
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
+    })
+
+    const refreshedTokens = await response.json()
+
+    if (!response.ok) {
+      console.error('API token refresh failed:', refreshedTokens)
+      return null
+    }
+
+    console.log('API token refresh successful')
+    
+    return {
+      accessToken: refreshedTokens.access_token,
+      expiresIn: refreshedTokens.expires_in
+    }
+  } catch (error) {
+    console.error('Error refreshing token in API:', error)
+    return null
   }
 }
 
