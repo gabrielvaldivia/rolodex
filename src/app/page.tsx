@@ -1692,6 +1692,19 @@ export default function Home() {
       // If we don't have any contacts loaded yet, load them
       if (contacts.length === 0) {
         loadContacts();
+
+        // Add a timeout to prevent infinite loading
+        const timeout = setTimeout(() => {
+          if (contacts.length === 0 && !backgroundSyncing) {
+            console.log(
+              "⏰ Loading timeout reached, clearing cache and retrying"
+            );
+            clearContactsCache();
+            loadContacts();
+          }
+        }, 30000); // 30 seconds timeout
+
+        return () => clearTimeout(timeout);
       } else {
         // If we already have contacts (from cache), just fetch fresh data in background
         console.log("🔄 Fetching fresh contacts from backend");
@@ -1814,6 +1827,7 @@ export default function Home() {
         hasCached: !!cached,
         hasTimestamp: !!timestamp,
         cachedLength: cached ? cached.length : 0,
+        cachedPreview: cached ? cached.substring(0, 50) + "..." : "null",
       });
 
       if (!cached || !timestamp) {
@@ -1836,11 +1850,42 @@ export default function Home() {
         return null;
       }
 
+      // Parse the cached data
       const contacts = JSON.parse(cached);
+
+      // Validate that we got a proper array of contacts
+      if (!Array.isArray(contacts)) {
+        console.error("❌ Cached data is not an array:", typeof contacts);
+        clearContactsCache(); // Clear corrupted cache
+        return null;
+      }
+
+      // Check if the array is empty or contains invalid data
+      if (contacts.length === 0) {
+        console.log("📭 Cache contains empty array, will fetch fresh data");
+        clearContactsCache(); // Clear empty cache
+        return null;
+      }
+
+      // Validate that the first contact has the expected structure
+      if (
+        contacts.length > 0 &&
+        (!contacts[0] || typeof contacts[0] !== "object" || !contacts[0].email)
+      ) {
+        console.error(
+          "❌ Cached contacts have invalid structure:",
+          contacts[0]
+        );
+        clearContactsCache(); // Clear corrupted cache
+        return null;
+      }
+
       console.log("📦 Loaded", contacts.length, "contacts from cache");
       return contacts;
     } catch (error) {
-      console.error("Failed to load contacts from cache:", error);
+      console.error("❌ Failed to load contacts from cache:", error);
+      // Clear corrupted cache
+      clearContactsCache();
       return null;
     }
   };
@@ -1951,6 +1996,11 @@ export default function Home() {
         `✅ ${background ? "Background" : "Initial"} contacts loaded:`,
         contactsWithEdits.length
       );
+
+      // If we got 0 contacts and this is not a background sync, show a message
+      if (contactsWithEdits.length === 0 && !background) {
+        console.log("⚠️ No contacts found - this might indicate an API issue");
+      }
 
       // If this was a background fetch, show a subtle indicator
       if (background) {
@@ -2232,6 +2282,20 @@ export default function Home() {
               ? "Syncing contacts from Google..."
               : "Loading contacts..."}
           </div>
+          <div className="text-xs text-gray-400 mt-2">
+            {backgroundSyncing
+              ? "This may take a couple minutes"
+              : "If this takes too long, try refreshing the page"}
+          </div>
+          <button
+            onClick={() => {
+              clearContactsCache();
+              window.location.reload();
+            }}
+            className="text-xs text-blue-500 hover:text-blue-700 underline"
+          >
+            Clear cache and retry
+          </button>
         </div>
       </div>
     );
@@ -2579,6 +2643,24 @@ export default function Home() {
               {backgroundSyncing
                 ? "Syncing from Google..."
                 : "Click the refresh button to sync contacts from Gmail and Calendar"}
+            </div>
+            <div className="mt-4 space-y-2">
+              <button
+                onClick={() => fetchContacts(false)}
+                className="bg-blue-500 text-white px-4 py-2 rounded text-sm"
+                disabled={loading || backgroundSyncing}
+              >
+                {loading ? "Loading..." : "Try Again"}
+              </button>
+              <button
+                onClick={() => {
+                  clearContactsCache();
+                  window.location.reload();
+                }}
+                className="block mx-auto text-xs text-gray-500 hover:text-gray-700 underline"
+              >
+                Clear cache and retry
+              </button>
             </div>
           </div>
         ) : (
