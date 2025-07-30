@@ -19,6 +19,7 @@ export const useContacts = () => {
     baseContacts: Contact[]
   ): Promise<Contact[]> => {
     try {
+      console.log("🔄 Fetching edits from /api/contacts/edits...");
       const response = await fetch("/api/contacts/edits");
       if (!response.ok) {
         console.error("Failed to fetch edits:", response.status);
@@ -26,6 +27,7 @@ export const useContacts = () => {
       }
 
       const editsObject = await response.json();
+      console.log("📝 Loaded edits object:", editsObject);
       console.log(
         "Loaded edits with tags:",
         Object.values(editsObject).slice(0, 3)
@@ -34,7 +36,7 @@ export const useContacts = () => {
       return baseContacts.map((contact) => {
         const edit = editsObject[contact.id];
         if (edit) {
-          return {
+          const updatedContact = {
             ...contact,
             name: edit.name !== undefined ? edit.name : contact.name,
             email: edit.email !== undefined ? edit.email : contact.email,
@@ -47,6 +49,17 @@ export const useContacts = () => {
             photoUrl:
               edit.photoUrl !== undefined ? edit.photoUrl : contact.photoUrl,
           };
+          
+          // Debug: log if tags were changed
+          if (edit.tags && JSON.stringify(edit.tags) !== JSON.stringify(contact.tags)) {
+            console.log(`🔄 Applied edit for contact ${contact.id}:`, {
+              oldTags: contact.tags,
+              newTags: edit.tags,
+              company: contact.company
+            });
+          }
+          
+          return updatedContact;
         }
         return contact;
       });
@@ -165,8 +178,21 @@ export const useContacts = () => {
     const cachedContacts = loadContactsFromCache();
     if (cachedContacts) {
       console.log("🚀 Showing cached contacts immediately");
-      setContacts(cachedContacts);
-      setCachedContacts(cachedContacts);
+      
+      // Apply edits to cached contacts so they show the correct state
+      console.log("🔍 Applying edits to cached contacts...");
+      const cachedContactsWithEdits = await applyEditsToContacts(cachedContacts);
+      console.log(`📊 Cached contacts: ${cachedContacts.length}, with edits: ${cachedContactsWithEdits.length}`);
+      
+      // Debug: check if any contacts have tags
+      const contactsWithTags = cachedContactsWithEdits.filter(c => c.tags && c.tags.length > 0);
+      console.log(`🏷️ Contacts with tags: ${contactsWithTags.length}`);
+      contactsWithTags.forEach(c => {
+        console.log(`  - ${c.name} (${c.company}): ${c.tags?.join(', ')}`);
+      });
+      
+      setContacts(cachedContactsWithEdits);
+      setCachedContacts(cachedContactsWithEdits);
       
       // Then fetch fresh data in the background (only if we have a session)
       if (session) {
@@ -335,8 +361,22 @@ export const useContacts = () => {
     const cachedContacts = loadContactsFromCache();
     if (cachedContacts) {
       console.log("🚀 Loading cached contacts on mount");
-      setContacts(cachedContacts);
-      setCachedContacts(cachedContacts);
+      
+      // Apply edits to cached contacts so they show the correct state
+      console.log("🔍 Applying edits to cached contacts...");
+      applyEditsToContacts(cachedContacts).then((cachedContactsWithEdits) => {
+        console.log(`📊 Cached contacts: ${cachedContacts.length}, with edits: ${cachedContactsWithEdits.length}`);
+        
+        // Debug: check if any contacts have tags
+        const contactsWithTags = cachedContactsWithEdits.filter(c => c.tags && c.tags.length > 0);
+        console.log(`🏷️ Contacts with tags: ${contactsWithTags.length}`);
+        contactsWithTags.forEach(c => {
+          console.log(`  - ${c.name} (${c.company}): ${c.tags?.join(', ')}`);
+        });
+        
+        setContacts(cachedContactsWithEdits);
+        setCachedContacts(cachedContactsWithEdits);
+      });
     }
   }, []);
 

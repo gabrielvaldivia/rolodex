@@ -369,9 +369,20 @@ export default function Home() {
 
   // Filter and sort data
   const filteredContacts = filterContacts(contacts);
-  const filteredCompanies = filterCompanies(
-    groupContactsByCompany(filteredContacts)
+  const allCompanies = groupContactsByCompany(filteredContacts);
+  const filteredCompanies = filterCompanies(allCompanies);
+
+  // Debug: check if Sunny Health company has the correct tags
+  const sunnyHealthCompany = allCompanies.find(
+    (c) => c.name === "Sunny Health"
   );
+  if (sunnyHealthCompany) {
+    console.log("🏢 Sunny Health company tags:", sunnyHealthCompany.tags);
+    console.log(
+      "🏢 Sunny Health company contacts:",
+      sunnyHealthCompany.contacts.map((c) => ({ name: c.name, tags: c.tags }))
+    );
+  }
   const sortedContacts = sortContacts(filteredContacts);
   const sortedCompanies = sortCompanies(filteredCompanies);
 
@@ -775,7 +786,7 @@ export default function Home() {
         selectedCompany={selectedCompany}
         isSheetOpen={isCompanySheetOpen}
         onSheetOpenChange={setIsCompanySheetOpen}
-        onCompanyUpdate={(updatedCompany) => {
+        onCompanyUpdate={async (updatedCompany) => {
           // Update all contacts in the company
           const updatedContacts = contacts.map((contact) =>
             contact.company === updatedCompany.name
@@ -788,6 +799,64 @@ export default function Home() {
               : contact
           );
           setContacts(updatedContacts);
+
+          // Save all contacts in the company to persist the changes
+          const companyContacts = updatedContacts.filter(
+            (contact) => contact.company === updatedCompany.name
+          );
+
+          try {
+            console.log(
+              `🔄 Saving ${companyContacts.length} contacts for company: ${updatedCompany.name}`
+            );
+            console.log(`📝 Company tags:`, updatedCompany.tags);
+
+            // Save each contact in the company
+            await Promise.all(
+              companyContacts.map(async (contact) => {
+                console.log(
+                  `💾 Saving contact ${contact.id} with tags:`,
+                  contact.tags
+                );
+
+                const response = await fetch(`/api/contacts/${contact.id}`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    name: contact.name,
+                    email: contact.email,
+                    company: contact.company || "",
+                    hidden: contact.hidden || false,
+                    starred: contact.starred || false,
+                    tags: contact.tags || [],
+                    photoUrl: contact.photoUrl,
+                  }),
+                });
+
+                if (!response.ok) {
+                  const errorData = await response.json();
+                  console.error(
+                    `❌ Failed to save contact ${contact.id}:`,
+                    errorData
+                  );
+                  throw new Error(
+                    `Failed to save contact ${contact.id}: ${
+                      errorData.error || response.statusText
+                    }`
+                  );
+                }
+
+                console.log(`✅ Successfully saved contact ${contact.id}`);
+              })
+            );
+
+            console.log(
+              `✅ Successfully saved all contacts in company: ${updatedCompany.name}`
+            );
+          } catch (error) {
+            console.error("Error saving company contacts:", error);
+            // Optionally show an error message to the user
+          }
         }}
         onContactClick={handleContactClick}
         allTags={allTags}
