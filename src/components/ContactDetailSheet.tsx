@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +42,16 @@ export default function ContactDetailSheet({
 }: ContactDetailSheetProps) {
   const [editingName, setEditingName] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset editing state when sheet opens/closes
+  useEffect(() => {
+    if (!isSheetOpen) {
+      setEditingName(false);
+      setEditingEmail(false);
+    }
+  }, [isSheetOpen]);
 
   if (!selectedContact || !editedContact) return null;
 
@@ -59,6 +69,7 @@ export default function ContactDetailSheet({
               <div className="flex-1 min-w-0">
                 {editingName ? (
                   <Input
+                    ref={nameInputRef}
                     value={editedContact.name}
                     onChange={(e) => {
                       saveContactDebounced({
@@ -68,11 +79,14 @@ export default function ContactDetailSheet({
                     }}
                     onBlur={() => setEditingName(false)}
                     className="text-lg font-semibold"
-                    autoFocus
                   />
                 ) : (
                   <button
-                    onClick={() => setEditingName(true)}
+                    onClick={() => {
+                      setEditingName(true);
+                      // Focus the input after a brief delay to ensure it's rendered
+                      setTimeout(() => nameInputRef.current?.focus(), 0);
+                    }}
                     className="text-lg font-semibold px-2 py-1 rounded -ml-2 text-left w-full"
                   >
                     {editedContact.name}
@@ -81,6 +95,7 @@ export default function ContactDetailSheet({
                 <div>
                   {editingEmail ? (
                     <Input
+                      ref={emailInputRef}
                       value={editedContact.email}
                       onChange={(e) => {
                         saveContactDebounced({
@@ -90,11 +105,14 @@ export default function ContactDetailSheet({
                       }}
                       onBlur={() => setEditingEmail(false)}
                       className="text-sm"
-                      autoFocus
                     />
                   ) : (
                     <button
-                      onClick={() => setEditingEmail(true)}
+                      onClick={() => {
+                        setEditingEmail(true);
+                        // Focus the input after a brief delay to ensure it's rendered
+                        setTimeout(() => emailInputRef.current?.focus(), 0);
+                      }}
                       className="text-sm text-muted-foreground font-normal px-2 py-1 rounded -ml-2"
                     >
                       {editedContact.email}
@@ -229,33 +247,34 @@ export default function ContactDetailSheet({
                   <div className="text-sm text-foreground mt-3">
                     {(() => {
                       const preview = selectedContact.lastEmailPreview;
-                      // Remove HTML tags first
-                      const cleanPreview = preview.replace(/<[^>]*>/g, "");
-
-                      console.log("📧 Contact email preview:", cleanPreview);
-
                       // Find the position of the first "On" pattern that indicates a previous email
                       const onPattern =
                         /On\s+\w+,\s+\w+\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(AM|PM)?\s+.+?\s+wrote:/i;
-                      const match = cleanPreview.match(onPattern);
+                      const match = preview.match(onPattern);
 
+                      let latestEmail;
                       if (match && match.index !== undefined) {
                         console.log(
                           "📧 Found email chain at position:",
                           match.index
                         );
-                        const latestEmail = cleanPreview
-                          .substring(0, match.index)
-                          .trim();
+                        latestEmail = preview.substring(0, match.index).trim();
                         console.log("📧 Latest email:", latestEmail);
-                        return latestEmail;
+                      } else {
+                        // Fallback: if no "On" pattern found, return the full preview
+                        console.log(
+                          "📧 No email chain pattern found, returning full preview"
+                        );
+                        latestEmail = preview;
                       }
 
-                      // Fallback: if no "On" pattern found, return the full preview
-                      console.log(
-                        "📧 No email chain pattern found, returning full preview"
+                      // Render as HTML to preserve links
+                      return (
+                        <div
+                          dangerouslySetInnerHTML={{ __html: latestEmail }}
+                          className="whitespace-pre-wrap"
+                        />
                       );
-                      return cleanPreview;
                     })()}
                   </div>
                 )}

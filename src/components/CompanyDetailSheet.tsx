@@ -89,10 +89,6 @@ export default function CompanyDetailSheet({
                     {editedCompany.name}
                   </button>
                 )}
-                <div className="text-sm text-muted-foreground">
-                  {editedCompany.contactCount} contact
-                  {editedCompany.contactCount !== 1 ? "s" : ""}
-                </div>
               </div>
             </SheetTitle>
           </SheetHeader>
@@ -224,43 +220,42 @@ export default function CompanyDetailSheet({
                           </div>
                         )}
                         {mostRecentContact.lastEmailPreview && (
-                          <div className="text-sm text-foreground mt-3 whitespace-pre-wrap">
+                          <div className="text-sm text-foreground mt-3">
                             {(() => {
                               const preview =
                                 mostRecentContact.lastEmailPreview;
-                              // Remove HTML tags first
-                              const cleanPreview = preview.replace(
-                                /<[^>]*>/g,
-                                ""
-                              );
-
-                              console.log(
-                                "📧 Company email preview:",
-                                cleanPreview
-                              );
-
                               // Find the position of the first "On" pattern that indicates a previous email
                               const onPattern =
                                 /On\s+\w+,\s+\w+\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(AM|PM)?\s+.+?\s+wrote:/i;
-                              const match = cleanPreview.match(onPattern);
+                              const match = preview.match(onPattern);
 
+                              let latestEmail;
                               if (match && match.index !== undefined) {
                                 console.log(
                                   "📧 Found email chain at position:",
                                   match.index
                                 );
-                                const latestEmail = cleanPreview
+                                latestEmail = preview
                                   .substring(0, match.index)
                                   .trim();
                                 console.log("📧 Latest email:", latestEmail);
-                                return latestEmail;
+                              } else {
+                                // Fallback: if no "On" pattern found, return the full preview
+                                console.log(
+                                  "📧 No email chain pattern found, returning full preview"
+                                );
+                                latestEmail = preview;
                               }
 
-                              // Fallback: if no "On" pattern found, return the full preview
-                              console.log(
-                                "📧 No email chain pattern found, returning full preview"
+                              // Render as HTML to preserve links
+                              return (
+                                <div
+                                  dangerouslySetInnerHTML={{
+                                    __html: latestEmail,
+                                  }}
+                                  className="whitespace-pre-wrap"
+                                />
                               );
-                              return cleanPreview;
                             })()}
                           </div>
                         )}

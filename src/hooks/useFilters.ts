@@ -1,75 +1,25 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Contact, Company, SortField, SortDirection, View, ViewType } from "@/types";
-import { saveToLocalStorage, loadFromLocalStorage } from "@/lib/utils";
+import { useLocalStorage } from "./useLocalStorage";
 
 export const useFilters = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortField, setSortField] = useState<SortField>("lastContact");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [currentView, setCurrentView] = useState<View>("contacts");
-  const [viewType, setViewType] = useState<ViewType>("table");
+  const [currentView, setCurrentView] = useLocalStorage<View>("rolodex-current-view", "contacts");
+  const [viewType, setViewType] = useLocalStorage<ViewType>("rolodex-view-type", "table");
   const [showHidden, setShowHidden] = useState(false);
   const [showStarred, setShowStarred] = useState(false);
   const [showGmail, setShowGmail] = useState(true);
   const [showCalendar, setShowCalendar] = useState(true);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
-  const [customTagColors, setCustomTagColors] = useState<
+  const [customTagColors, setCustomTagColors] = useLocalStorage<
     Record<string, { bg: string; text: string; border: string }>
-  >({});
-  const [columnOrder, setColumnOrder] = useState<string[]>([]);
-
-  // Load custom tag colors from localStorage
-  useEffect(() => {
-    const savedColors = loadFromLocalStorage("rolodex-custom-tag-colors", {});
-    setCustomTagColors(savedColors);
-  }, []);
-
-  // Load view type from localStorage
-  useEffect(() => {
-    const savedViewType = loadFromLocalStorage<ViewType>("rolodex-view-type", "table");
-    setViewType(savedViewType);
-  }, []);
-
-  // Load current view from localStorage
-  useEffect(() => {
-    const savedCurrentView = loadFromLocalStorage<View>("rolodex-current-view", "contacts");
-    setCurrentView(savedCurrentView);
-  }, []);
-
-  // Load column order from localStorage
-  useEffect(() => {
-    const savedColumnOrder = loadFromLocalStorage<string[]>("rolodex-column-order", []);
-    setColumnOrder(savedColumnOrder);
-  }, []);
-
-  // Save custom tag colors to localStorage
-  const saveCustomTagColors = useCallback((
-    colors: Record<string, { bg: string; text: string; border: string }>
-  ) => {
-    setCustomTagColors(colors);
-    saveToLocalStorage("rolodex-custom-tag-colors", colors);
-  }, []);
-
-  // Save view type to localStorage
-  const saveViewType = useCallback((newViewType: ViewType) => {
-    setViewType(newViewType);
-    saveToLocalStorage("rolodex-view-type", newViewType);
-  }, []);
-
-  // Save current view to localStorage
-  const saveCurrentView = useCallback((newView: View) => {
-    setCurrentView(newView);
-    saveToLocalStorage("rolodex-current-view", newView);
-  }, []);
-
-  // Save column order to localStorage
-  const saveColumnOrder = useCallback((newOrder: string[]) => {
-    setColumnOrder(newOrder);
-    saveToLocalStorage("rolodex-column-order", newOrder);
-  }, []);
+  >("rolodex-custom-tag-colors", {});
+  const [columnOrder, setColumnOrder] = useLocalStorage<string[]>("rolodex-column-order", []);
 
   // Extract all unique tags from contacts for autocomplete
   const updateAllTags = useCallback((contacts: Contact[]) => {
@@ -307,9 +257,9 @@ export const useFilters = () => {
     filterContacts,
     filterCompanies,
     updateAllTags,
-    saveCustomTagColors,
-    saveViewType,
-    saveCurrentView,
-    saveColumnOrder,
+    saveCustomTagColors: setCustomTagColors,
+    saveViewType: setViewType,
+    saveCurrentView: setCurrentView,
+    saveColumnOrder: setColumnOrder,
   };
 }; 

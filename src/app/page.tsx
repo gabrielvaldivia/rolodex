@@ -2,67 +2,26 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ExternalLink, Plus, Edit, Palette, Pencil } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { RichText } from "@/components/RichText";
-import { EmailText } from "@/components/EmailText";
-import { ContactAvatar } from "@/components/ContactAvatar";
 
 // Import our new components and hooks
-import TagInput from "@/components/TagInput";
-import TagDisplay from "@/components/TagDisplay";
 import KanbanBoard from "@/components/KanbanBoard";
 import ContactDetailSheet from "@/components/ContactDetailSheet";
 import CompanyDetailSheet from "@/components/CompanyDetailSheet";
 import HeaderControls from "@/components/HeaderControls";
+import DataTable from "@/components/DataTable";
 import { useContacts } from "@/hooks/useContacts";
 import { useFilters } from "@/hooks/useFilters";
+import { useSaveOperation } from "@/hooks/useSaveOperation";
+import { useContactService } from "@/hooks/useContactService";
+import { useSheetState } from "@/hooks/useSheetState";
+import { useLoadingState } from "@/hooks/useLoadingState";
+import { useErrorHandler } from "@/hooks/useErrorHandler";
 import { groupContactsByCompany } from "@/lib/contacts";
-import {
-  formatRelativeDate,
-  formatRegularDate,
-  openWebsite,
-  openGmail,
-  openCalendar,
-  getTagColor,
-  TAG_COLORS,
-} from "@/lib/utils";
-import {
-  Contact,
-  Company,
-  SortField,
-  SortDirection,
-  View,
-  ViewType,
-} from "@/types";
+import { getTableConfig } from "@/lib/tableConfig";
+import { updateTagsForMove } from "@/lib/tagUtils";
+import { Contact, Company, SortField } from "@/types";
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -113,17 +72,34 @@ export default function Home() {
     saveColumnOrder,
   } = useFilters();
 
+  // Use new unified hooks
+  const { isSaving, lastError, saveWithDebounce, clearSaveState } =
+    useSaveOperation();
+  const { saveContact, updateContactTags, updateCompanyContacts } =
+    useContactService();
+  const { handleAsyncOperation } = useErrorHandler();
+
   // Contact sheet state
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [editedContact, setEditedContact] = useState<Contact | null>(null);
-  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSaveError, setLastSaveError] = useState<string | null>(null);
+  const {
+    selectedItem: selectedContact,
+    editedItem: editedContact,
+    setEditedItem: setEditedContact,
+    isOpen: isSheetOpen,
+    setIsOpen: setIsSheetOpen,
+    openSheet: openContactSheet,
+    closeSheet: closeContactSheet,
+  } = useSheetState<Contact>();
 
   // Company sheet state
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [isCompanySheetOpen, setIsCompanySheetOpen] = useState(false);
+  const {
+    selectedItem: selectedCompany,
+    isOpen: isCompanySheetOpen,
+    setIsOpen: setIsCompanySheetOpen,
+    openSheet: openCompanySheet,
+    closeSheet: closeCompanySheet,
+  } = useSheetState<Company>();
+
+  // Company editing state
   const [editingCompanyName, setEditingCompanyName] = useState(false);
   const [editingCompanyWebsite, setEditingCompanyWebsite] = useState(false);
   const [originalCompanyName, setOriginalCompanyName] = useState("");
@@ -145,99 +121,34 @@ export default function Home() {
 
   // Contact handlers
   const handleContactClick = (contact: Contact) => {
-    setSelectedContact(contact);
-    setEditedContact({ ...contact });
-    setLastSaveError(null);
-    setIsSaving(false);
-    setIsSheetOpen(true);
+    openContactSheet(contact);
   };
 
   const saveContactDebounced = async (contact: Contact) => {
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-    }
+    await saveWithDebounce(async () => {
+      await saveContact(contact);
 
-    setLastSaveError(null);
-    setIsSaving(true);
-
-    const timeout = setTimeout(async () => {
-      try {
-        const response = await fetch(`/api/contacts/${contact.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: contact.name,
-            email: contact.email,
-            company: contact.company || "",
-            hidden: contact.hidden || false,
-            starred: contact.starred || false,
-            tags: contact.tags || [],
-            photoUrl: contact.photoUrl,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to save contact");
-        }
-
-        // Update the contact in the contacts array
-        const updatedContacts = contacts.map((c) =>
-          c.id === contact.id
-            ? {
-                ...contact,
-                lastContact: c.lastContact,
-                source: c.source,
-                lastEmailSubject: c.lastEmailSubject,
-                lastEmailPreview: c.lastEmailPreview,
-                lastMeetingName: c.lastMeetingName,
-                photoUrl: contact.photoUrl,
-              }
-            : c
-        );
-        setContacts(updatedContacts);
-      } catch (error) {
-        console.error("Error saving contact:", error);
-        setLastSaveError(
-          error instanceof Error ? error.message : "Failed to save contact"
-        );
-      } finally {
-        setIsSaving(false);
-      }
-    }, 300);
-
-    setSaveTimeout(timeout);
-  };
-
-  const handleCloseSheet = () => {
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-    }
-    setIsSheetOpen(false);
-    setSelectedContact(null);
-    setEditedContact(null);
-    setSaveTimeout(null);
-    setLastSaveError(null);
-    setIsSaving(false);
+      // Update the contact in the contacts array
+      const updatedContacts = contacts.map((c) =>
+        c.id === contact.id
+          ? {
+              ...contact,
+              lastContact: c.lastContact,
+              source: c.source,
+              lastEmailSubject: c.lastEmailSubject,
+              lastEmailPreview: c.lastEmailPreview,
+              lastMeetingName: c.lastMeetingName,
+              photoUrl: contact.photoUrl,
+            }
+          : c
+      );
+      setContacts(updatedContacts);
+    });
   };
 
   // Company handlers
   const handleCompanyClick = (company: Company) => {
-    setSelectedCompany(company);
-    setLastSaveError(null);
-    setIsSaving(false);
-    setEditingCompanyWebsite(false);
-    setIsCompanySheetOpen(true);
-  };
-
-  const handleCloseCompanySheet = () => {
-    setIsCompanySheetOpen(false);
-    setSelectedCompany(null);
-    setEditingCompanyName(false);
-    setEditingCompanyWebsite(false);
-    setOriginalCompanyName("");
-    setLastSaveError(null);
-    setIsSaving(false);
+    openCompanySheet(company);
   };
 
   // Card move handler
@@ -249,48 +160,22 @@ export default function Home() {
   ) => {
     if (sourceTag === targetTag) return;
 
-    setLastSaveError(null);
-    setIsSaving(true);
-
-    try {
+    await handleAsyncOperation(async () => {
       if (itemType === "contact") {
         const contact = item as Contact;
-        let newTags = contact.tags || [];
-
-        if (targetTag === "No Tags") {
-          newTags = [];
-        } else if (sourceTag === "No Tags") {
-          newTags = [targetTag];
-        } else {
-          newTags = newTags.map((tag) => (tag === sourceTag ? targetTag : tag));
-          if (!contact.tags?.includes(sourceTag)) {
-            newTags = [...newTags, targetTag];
-          }
-        }
-
+        const newTags = updateTagsForMove(
+          contact.tags || [],
+          sourceTag,
+          targetTag
+        );
         const updatedContact = { ...contact, tags: newTags };
+
+        await updateContactTags(contact, newTags);
+
         const updatedContacts = contacts.map((c) =>
           c.id === contact.id ? updatedContact : c
         );
         setContacts(updatedContacts);
-
-        const response = await fetch(`/api/contacts/${contact.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: contact.name,
-            email: contact.email,
-            company: contact.company,
-            hidden: contact.hidden,
-            starred: contact.starred,
-            tags: newTags,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to update contact");
-        }
       } else {
         // Handle company moves
         const company = item as Company;
@@ -298,73 +183,25 @@ export default function Home() {
           (c) => c.company === company.name
         );
 
-        for (const contact of companyContacts) {
-          let newTags = contact.tags || [];
-
-          if (targetTag === "No Tags") {
-            newTags = [];
-          } else if (sourceTag === "No Tags") {
-            newTags = [targetTag];
-          } else {
-            newTags = newTags.map((tag) =>
-              tag === sourceTag ? targetTag : tag
-            );
-            if (!contact.tags?.includes(sourceTag)) {
-              newTags = [...newTags, targetTag];
-            }
-          }
-
-          const response = await fetch(`/api/contacts/${contact.id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: contact.name,
-              email: contact.email,
-              company: contact.company,
-              hidden: contact.hidden,
-              starred: contact.starred,
-              tags: newTags,
-            }),
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || "Failed to update contact");
-          }
-        }
-
-        // Update local state for all company contacts
+        // Update all contacts in the company
         const updatedContacts = contacts.map((contact) => {
           if (contact.company === company.name) {
-            let newTags = contact.tags || [];
-
-            if (targetTag === "No Tags") {
-              newTags = [];
-            } else if (sourceTag === "No Tags") {
-              newTags = [targetTag];
-            } else {
-              newTags = newTags.map((tag) =>
-                tag === sourceTag ? targetTag : tag
-              );
-              if (!contact.tags?.includes(sourceTag)) {
-                newTags = [...newTags, targetTag];
-              }
-            }
-
+            const newTags = updateTagsForMove(
+              contact.tags || [],
+              sourceTag,
+              targetTag
+            );
             return { ...contact, tags: newTags };
           }
           return contact;
         });
+
         setContacts(updatedContacts);
+
+        // Save all company contacts
+        await updateCompanyContacts(company.name, updatedContacts);
       }
-    } catch (error) {
-      console.error("Error moving card:", error);
-      setLastSaveError(
-        error instanceof Error ? error.message : "Failed to move card"
-      );
-    } finally {
-      setIsSaving(false);
-    }
+    }, "Failed to move card");
   };
 
   // Filter and sort data
@@ -542,227 +379,24 @@ export default function Home() {
                   />
                 )}
               </div>
-            ) : currentView === "contacts" ? (
-              <div className="overflow-x-auto px-8">
-                <Table className="w-full">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12 text-center"></TableHead>
-                      <TableHead
-                        onClick={() => handleSort("name")}
-                        className="cursor-pointer hover:bg-muted/50 max-w-32"
-                      >
-                        Name {getSortIcon("name")}
-                      </TableHead>
-                      <TableHead
-                        onClick={() => handleSort("email")}
-                        className="cursor-pointer hover:bg-muted/50 max-w-48"
-                      >
-                        Email {getSortIcon("email")}
-                      </TableHead>
-                      <TableHead
-                        onClick={() => handleSort("company")}
-                        className="cursor-pointer hover:bg-muted/50 min-w-8"
-                      >
-                        Company {getSortIcon("company")}
-                      </TableHead>
-                      <TableHead
-                        onClick={() => handleSort("tags")}
-                        className="cursor-pointer hover:bg-muted/50 min-w-8"
-                      >
-                        Tags {getSortIcon("tags")}
-                      </TableHead>
-                      <TableHead className="w-12 text-center">Source</TableHead>
-                      <TableHead
-                        onClick={() => handleSort("lastContact")}
-                        className="cursor-pointer hover:bg-muted/50 whitespace-nowrap min-w-8 text-right"
-                      >
-                        Last Contact {getSortIcon("lastContact")}
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedContacts.map((contact) => (
-                      <TableRow
-                        key={contact.id}
-                        className="cursor-pointer hover:bg-muted/50"
-                      >
-                        <TableCell className="text-center">
-                          <ContactAvatar
-                            contact={contact}
-                            size="sm"
-                            className="mx-auto"
-                          />
-                        </TableCell>
-                        <TableCell
-                          className="font-medium truncate max-w-32"
-                          onClick={() => handleContactClick(contact)}
-                        >
-                          <span className="truncate">{contact.name}</span>
-                        </TableCell>
-                        <TableCell
-                          className="text-muted-foreground truncate max-w-48"
-                          onClick={() => handleContactClick(contact)}
-                        >
-                          {contact.email}
-                        </TableCell>
-                        <TableCell
-                          className="text-muted-foreground truncate max-w-32"
-                          onClick={() => handleContactClick(contact)}
-                        >
-                          <span className="truncate">
-                            {contact.company || "—"}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          className="max-w-32"
-                          onClick={() => handleContactClick(contact)}
-                        >
-                          <TagDisplay
-                            tags={contact.tags || []}
-                            maxDisplay={2}
-                            customColors={customTagColors}
-                          />
-                        </TableCell>
-                        <TableCell
-                          className="text-center"
-                          onClick={() => handleContactClick(contact)}
-                        >
-                          <div className="flex justify-center">
-                            {contact.source === "Gmail" ? (
-                              <img
-                                src="/icons/gmail.png"
-                                alt="Gmail"
-                                className="h-4 w-4"
-                              />
-                            ) : contact.source === "Calendar" ? (
-                              <img
-                                src="/icons/calendar.png"
-                                alt="Calendar"
-                                className="h-4 w-4"
-                              />
-                            ) : (
-                              <span className="text-xs text-muted-foreground">
-                                —
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          className="text-muted-foreground whitespace-nowrap text-right"
-                          onClick={() => handleContactClick(contact)}
-                        >
-                          <span className="text-sm">
-                            {formatRelativeDate(contact.lastContact)}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
             ) : (
-              <div className="overflow-x-auto px-8">
-                <Table className="w-full">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead
-                        onClick={() => handleSort("name")}
-                        className="cursor-pointer hover:bg-muted/50 min-w-48"
-                      >
-                        Company {getSortIcon("name")}
-                      </TableHead>
-                      <TableHead
-                        onClick={() => handleSort("company")}
-                        className="cursor-pointer hover:bg-muted/50 min-w-24"
-                      >
-                        Contact {getSortIcon("company")}
-                      </TableHead>
-                      <TableHead
-                        onClick={() => handleSort("tags")}
-                        className="cursor-pointer hover:bg-muted/50 min-w-40"
-                      >
-                        Tags {getSortIcon("tags")}
-                      </TableHead>
-                      <TableHead
-                        onClick={() => handleSort("lastContact")}
-                        className="cursor-pointer hover:bg-muted/50 whitespace-nowrap min-w-32 text-right"
-                      >
-                        Last Contact {getSortIcon("lastContact")}
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedCompanies.map((company) => (
-                      <TableRow
-                        key={company.name}
-                        className="cursor-pointer hover:bg-muted/50"
-                      >
-                        <TableCell
-                          className="font-medium truncate pr-4"
-                          onClick={() => handleCompanyClick(company)}
-                        >
-                          <span className="truncate">{company.name}</span>
-                        </TableCell>
-                        <TableCell
-                          className="text-muted-foreground truncate pr-4"
-                          onClick={() => handleCompanyClick(company)}
-                        >
-                          {(() => {
-                            // Sort contacts by most recent contact date
-                            const sortedContacts = [...company.contacts].sort(
-                              (a, b) => {
-                                if (
-                                  a.lastContact === "Unknown" &&
-                                  b.lastContact === "Unknown"
-                                )
-                                  return 0;
-                                if (a.lastContact === "Unknown") return 1;
-                                if (b.lastContact === "Unknown") return -1;
-                                return (
-                                  new Date(b.lastContact).getTime() -
-                                  new Date(a.lastContact).getTime()
-                                );
-                              }
-                            );
-
-                            const mostRecentContact = sortedContacts[0];
-                            const remainingCount = company.contactCount - 1;
-
-                            if (company.contactCount === 1) {
-                              return mostRecentContact.name;
-                            } else {
-                              return `${
-                                mostRecentContact.name
-                              } + ${remainingCount} other${
-                                remainingCount === 1 ? "" : "s"
-                              }`;
-                            }
-                          })()}
-                        </TableCell>
-                        <TableCell
-                          className="pr-4"
-                          onClick={() => handleCompanyClick(company)}
-                        >
-                          <TagDisplay
-                            tags={company.tags || []}
-                            maxDisplay={3}
-                            customColors={customTagColors}
-                          />
-                        </TableCell>
-                        <TableCell
-                          className="text-muted-foreground whitespace-nowrap text-right"
-                          onClick={() => handleCompanyClick(company)}
-                        >
-                          <span className="text-sm">
-                            {formatRelativeDate(company.lastContact)}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable
+                data={
+                  currentView === "contacts" ? sortedContacts : sortedCompanies
+                }
+                columns={getTableConfig(currentView)}
+                viewType={currentView}
+                onItemClick={(item) => {
+                  if (currentView === "contacts") {
+                    handleContactClick(item as Contact);
+                  } else {
+                    handleCompanyClick(item as Company);
+                  }
+                }}
+                onSort={handleSort}
+                getSortIcon={getSortIcon}
+                customTagColors={customTagColors}
+              />
             )}
           </div>
         )}
@@ -778,7 +412,7 @@ export default function Home() {
         allTags={allTags}
         customTagColors={customTagColors}
         isSaving={isSaving}
-        lastSaveError={lastSaveError}
+        lastSaveError={lastError}
       />
 
       {/* Company Detail Sheet */}
@@ -787,76 +421,23 @@ export default function Home() {
         isSheetOpen={isCompanySheetOpen}
         onSheetOpenChange={setIsCompanySheetOpen}
         onCompanyUpdate={async (updatedCompany) => {
-          // Update all contacts in the company
-          const updatedContacts = contacts.map((contact) =>
-            contact.company === updatedCompany.name
-              ? {
-                  ...contact,
-                  tags: updatedCompany.tags,
-                  hidden: updatedCompany.hidden,
-                  starred: updatedCompany.starred,
-                }
-              : contact
-          );
-          setContacts(updatedContacts);
-
-          // Save all contacts in the company to persist the changes
-          const companyContacts = updatedContacts.filter(
-            (contact) => contact.company === updatedCompany.name
-          );
-
-          try {
-            console.log(
-              `🔄 Saving ${companyContacts.length} contacts for company: ${updatedCompany.name}`
+          await handleAsyncOperation(async () => {
+            // Update all contacts in the company
+            const updatedContacts = contacts.map((contact) =>
+              contact.company === updatedCompany.name
+                ? {
+                    ...contact,
+                    tags: updatedCompany.tags,
+                    hidden: updatedCompany.hidden,
+                    starred: updatedCompany.starred,
+                  }
+                : contact
             );
-            console.log(`📝 Company tags:`, updatedCompany.tags);
+            setContacts(updatedContacts);
 
-            // Save each contact in the company
-            await Promise.all(
-              companyContacts.map(async (contact) => {
-                console.log(
-                  `💾 Saving contact ${contact.id} with tags:`,
-                  contact.tags
-                );
-
-                const response = await fetch(`/api/contacts/${contact.id}`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    name: contact.name,
-                    email: contact.email,
-                    company: contact.company || "",
-                    hidden: contact.hidden || false,
-                    starred: contact.starred || false,
-                    tags: contact.tags || [],
-                    photoUrl: contact.photoUrl,
-                  }),
-                });
-
-                if (!response.ok) {
-                  const errorData = await response.json();
-                  console.error(
-                    `❌ Failed to save contact ${contact.id}:`,
-                    errorData
-                  );
-                  throw new Error(
-                    `Failed to save contact ${contact.id}: ${
-                      errorData.error || response.statusText
-                    }`
-                  );
-                }
-
-                console.log(`✅ Successfully saved contact ${contact.id}`);
-              })
-            );
-
-            console.log(
-              `✅ Successfully saved all contacts in company: ${updatedCompany.name}`
-            );
-          } catch (error) {
-            console.error("Error saving company contacts:", error);
-            // Optionally show an error message to the user
-          }
+            // Save all contacts in the company
+            await updateCompanyContacts(updatedCompany.name, updatedContacts);
+          }, "Failed to update company");
         }}
         onContactClick={handleContactClick}
         allTags={allTags}
