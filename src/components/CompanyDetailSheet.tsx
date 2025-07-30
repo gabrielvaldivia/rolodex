@@ -44,8 +44,10 @@ export default function CompanyDetailSheet({
   const [editedCompany, setEditedCompany] = useState<Company | null>(null);
 
   // Update editedCompany when selectedCompany changes
-  if (selectedCompany && !editedCompany) {
-    setEditedCompany(selectedCompany);
+  if (selectedCompany) {
+    if (!editedCompany || editedCompany.name !== selectedCompany.name) {
+      setEditedCompany(selectedCompany);
+    }
   }
 
   if (!selectedCompany || !editedCompany) return null;
@@ -78,7 +80,6 @@ export default function CompanyDetailSheet({
                     }}
                     onBlur={() => setEditingName(false)}
                     className="text-lg font-semibold"
-                    autoFocus
                   />
                 ) : (
                   <button
@@ -223,25 +224,43 @@ export default function CompanyDetailSheet({
                           </div>
                         )}
                         {mostRecentContact.lastEmailPreview && (
-                          <div className="text-sm text-muted-foreground mt-3">
+                          <div className="text-sm text-foreground mt-3 whitespace-pre-wrap">
                             {(() => {
                               const preview =
                                 mostRecentContact.lastEmailPreview;
-                              // Find the first line that starts with "On" (indicating a previous email)
-                              const lines = preview.split("\n");
-                              const lastEmailLines = [];
+                              // Remove HTML tags first
+                              const cleanPreview = preview.replace(
+                                /<[^>]*>/g,
+                                ""
+                              );
 
-                              for (const line of lines) {
-                                // Stop at the first line that starts with "On" (case insensitive)
-                                if (
-                                  line.trim().toLowerCase().startsWith("on ")
-                                ) {
-                                  break;
-                                }
-                                lastEmailLines.push(line);
+                              console.log(
+                                "📧 Company email preview:",
+                                cleanPreview
+                              );
+
+                              // Find the position of the first "On" pattern that indicates a previous email
+                              const onPattern =
+                                /On\s+\w+,\s+\w+\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(AM|PM)?\s+.+?\s+wrote:/i;
+                              const match = cleanPreview.match(onPattern);
+
+                              if (match && match.index !== undefined) {
+                                console.log(
+                                  "📧 Found email chain at position:",
+                                  match.index
+                                );
+                                const latestEmail = cleanPreview
+                                  .substring(0, match.index)
+                                  .trim();
+                                console.log("📧 Latest email:", latestEmail);
+                                return latestEmail;
                               }
 
-                              return lastEmailLines.join("\n").trim();
+                              // Fallback: if no "On" pattern found, return the full preview
+                              console.log(
+                                "📧 No email chain pattern found, returning full preview"
+                              );
+                              return cleanPreview;
                             })()}
                           </div>
                         )}

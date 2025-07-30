@@ -226,8 +226,37 @@ export default function ContactDetailSheet({
                   </div>
                 )}
                 {selectedContact.lastEmailPreview && (
-                  <div className="text-sm text-muted-foreground mt-3">
-                    <EmailText content={selectedContact.lastEmailPreview} />
+                  <div className="text-sm text-foreground mt-3">
+                    {(() => {
+                      const preview = selectedContact.lastEmailPreview;
+                      // Remove HTML tags first
+                      const cleanPreview = preview.replace(/<[^>]*>/g, "");
+
+                      console.log("📧 Contact email preview:", cleanPreview);
+
+                      // Find the position of the first "On" pattern that indicates a previous email
+                      const onPattern =
+                        /On\s+\w+,\s+\w+\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}\s*(AM|PM)?\s+.+?\s+wrote:/i;
+                      const match = cleanPreview.match(onPattern);
+
+                      if (match && match.index !== undefined) {
+                        console.log(
+                          "📧 Found email chain at position:",
+                          match.index
+                        );
+                        const latestEmail = cleanPreview
+                          .substring(0, match.index)
+                          .trim();
+                        console.log("📧 Latest email:", latestEmail);
+                        return latestEmail;
+                      }
+
+                      // Fallback: if no "On" pattern found, return the full preview
+                      console.log(
+                        "📧 No email chain pattern found, returning full preview"
+                      );
+                      return cleanPreview;
+                    })()}
                   </div>
                 )}
               </div>
