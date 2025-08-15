@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +25,7 @@ interface CompanyDetailSheetProps {
   selectedCompany: Company | null;
   isSheetOpen: boolean;
   onSheetOpenChange: (open: boolean) => void;
-  onCompanyUpdate: (company: Company) => void;
+  onCompanyUpdate: (company: Company, originalCompanyName?: string) => void;
   onContactClick: (contact: Contact) => void;
   allTags: string[];
   customTagColors: Record<string, { bg: string; text: string; border: string }>;
@@ -44,17 +44,20 @@ export default function CompanyDetailSheet({
   const [editedCompany, setEditedCompany] = useState<Company | null>(null);
 
   // Update editedCompany when selectedCompany changes
-  if (selectedCompany) {
-    if (!editedCompany || editedCompany.name !== selectedCompany.name) {
+  React.useEffect(() => {
+    if (selectedCompany) {
       setEditedCompany(selectedCompany);
+      setEditingName(false); // Reset editing state when company changes
     }
-  }
+  }, [selectedCompany]);
 
   if (!selectedCompany || !editedCompany) return null;
 
   const saveCompanyDebounced = async (company: Company) => {
     setEditedCompany(company);
-    onCompanyUpdate(company);
+    // If the company name changed, pass the original name
+    const originalName = selectedCompany?.name;
+    onCompanyUpdate(company, originalName);
   };
 
   return (
@@ -73,18 +76,36 @@ export default function CompanyDetailSheet({
                   <Input
                     value={editedCompany.name}
                     onChange={(e) => {
-                      saveCompanyDebounced({
+                      setEditedCompany({
                         ...editedCompany,
                         name: e.target.value,
                       });
                     }}
-                    onBlur={() => setEditingName(false)}
+                    onBlur={() => {
+                      setEditingName(false);
+                      // Save the changes when editing is done
+                      if (editedCompany.name.trim()) {
+                        saveCompanyDebounced(editedCompany);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        setEditingName(false);
+                        if (editedCompany.name.trim()) {
+                          saveCompanyDebounced(editedCompany);
+                        }
+                      } else if (e.key === "Escape") {
+                        setEditingName(false);
+                        // Reset to original name
+                        setEditedCompany(selectedCompany);
+                      }
+                    }}
                     className="text-lg font-semibold"
                   />
                 ) : (
                   <button
                     onClick={() => setEditingName(true)}
-                    className="text-lg font-semibold px-2 py-1 rounded -ml-2 text-left w-full"
+                    className="text-lg font-semibold px-2 py-1 rounded -ml-2 text-left w-full hover:bg-muted/50"
                   >
                     {editedCompany.name}
                   </button>

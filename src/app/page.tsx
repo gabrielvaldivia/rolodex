@@ -420,19 +420,28 @@ export default function Home() {
         selectedCompany={selectedCompany}
         isSheetOpen={isCompanySheetOpen}
         onSheetOpenChange={setIsCompanySheetOpen}
-        onCompanyUpdate={async (updatedCompany) => {
+        onCompanyUpdate={async (
+          updatedCompany: Company,
+          originalCompanyName?: string
+        ) => {
           await handleAsyncOperation(async () => {
             // Update all contacts in the company
-            const updatedContacts = contacts.map((contact) =>
-              contact.company === updatedCompany.name
-                ? {
-                    ...contact,
-                    tags: updatedCompany.tags,
-                    hidden: updatedCompany.hidden,
-                    starred: updatedCompany.starred,
-                  }
-                : contact
-            );
+            const updatedContacts = contacts.map((contact) => {
+              // If this contact belongs to the original company name (for name changes)
+              // or to the current company name (for other updates)
+              const targetCompanyName =
+                originalCompanyName || updatedCompany.name;
+              if (contact.company === targetCompanyName) {
+                return {
+                  ...contact,
+                  company: updatedCompany.name, // Update the company name
+                  tags: updatedCompany.tags,
+                  hidden: updatedCompany.hidden,
+                  starred: updatedCompany.starred,
+                };
+              }
+              return contact;
+            });
             setContacts(updatedContacts);
 
             // Save all contacts in the company
