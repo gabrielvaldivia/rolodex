@@ -164,7 +164,13 @@ export const generateCompanyWebsite = (companyName: string): string => {
 // Local storage utilities
 export const saveToLocalStorage = (key: string, value: unknown) => {
   try {
+    console.log(`💾 Saving to localStorage: ${key}`, {
+      valueType: typeof value,
+      valueLength: typeof value === 'string' ? value.length : 'N/A',
+      valuePreview: typeof value === 'string' ? value.substring(0, 100) + '...' : value
+    });
     localStorage.setItem(key, JSON.stringify(value));
+    console.log(`✅ Successfully saved to localStorage: ${key}`);
   } catch (error) {
     console.error(`Failed to save to localStorage (${key}):`, error);
   }
@@ -172,10 +178,23 @@ export const saveToLocalStorage = (key: string, value: unknown) => {
 
 export const loadFromLocalStorage = <T>(key: string, defaultValue: T): T => {
   try {
+    console.log(`🔍 Loading from localStorage: ${key}`);
     const item = localStorage.getItem(key);
+    console.log(`🔍 localStorage result for ${key}:`, {
+      hasItem: !!item,
+      itemType: typeof item,
+      itemLength: item ? item.length : 0,
+      itemPreview: item ? item.substring(0, 100) + '...' : 'null'
+    });
+    
     if (!item) return defaultValue;
     try {
-      return JSON.parse(item);
+      const parsed = JSON.parse(item);
+      console.log(`✅ Successfully loaded from localStorage: ${key}`, {
+        parsedType: typeof parsed,
+        parsedLength: Array.isArray(parsed) ? parsed.length : 'N/A'
+      });
+      return parsed;
     } catch (jsonError) {
       // If it's a plain string and the default is a string, return it
       if (typeof defaultValue === "string") return item as unknown as T;

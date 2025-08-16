@@ -50,6 +50,8 @@ interface HeaderControlsProps {
   loading: boolean;
   backgroundSyncing: boolean;
   fetchContacts: (background: boolean) => void;
+  forceRefreshCache?: () => void;
+  isCacheStale?: () => boolean;
   onSettingsClick: () => void;
 }
 
@@ -77,6 +79,8 @@ export default function HeaderControls({
   loading,
   backgroundSyncing,
   fetchContacts,
+  forceRefreshCache,
+  isCacheStale,
   onSettingsClick,
 }: HeaderControlsProps) {
   return (
@@ -351,12 +355,21 @@ export default function HeaderControls({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            fetchContacts(true);
+            if (forceRefreshCache) {
+              forceRefreshCache();
+            } else {
+              fetchContacts(true);
+            }
           }}
-          variant="outline"
+          variant={isCacheStale?.() ? "destructive" : "outline"}
           size="sm"
           disabled={loading || backgroundSyncing}
           type="button"
+          title={
+            isCacheStale?.()
+              ? "Cache is stale - click to refresh"
+              : "Refresh contacts"
+          }
         >
           <RefreshCw
             className={`h-4 w-4 ${backgroundSyncing ? "animate-spin" : ""}`}

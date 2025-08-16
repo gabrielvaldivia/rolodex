@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { Contact, ContactEdit } from "@/types";
 import { saveToLocalStorage, loadFromLocalStorage, removeFromLocalStorage } from "@/lib/utils";
+import { db } from "@/lib/firebase";
 
 export const useContacts = () => {
   const { data: session, status } = useSession();
@@ -21,12 +22,21 @@ export const useContacts = () => {
     try {
       console.log("🔄 Fetching edits from /api/contacts/edits...");
       const response = await fetch("/api/contacts/edits");
+      
+      // If the API fails, just return the base contacts without edits
       if (!response.ok) {
-        console.error("Failed to fetch edits:", response.status);
+        console.warn("⚠️ Failed to fetch edits:", response.status, "- continuing without edits");
         return baseContacts;
       }
 
       const editsObject = await response.json();
+      
+      // If we got an empty object or no edits, return base contacts
+      if (!editsObject || Object.keys(editsObject).length === 0) {
+        console.log("📝 No edits found, using base contacts");
+        return baseContacts;
+      }
+      
       console.log("📝 Loaded edits object:", editsObject);
       console.log(
         "Loaded edits with tags:",
@@ -64,7 +74,7 @@ export const useContacts = () => {
         return contact;
       });
     } catch (error) {
-      console.error("Error applying edits:", error);
+      console.warn("⚠️ Error applying edits, continuing without edits:", error);
       return baseContacts;
     }
   };
@@ -72,8 +82,16 @@ export const useContacts = () => {
   // Cache contacts in localStorage
   const saveContactsToCache = (contacts: Contact[]) => {
     try {
-      saveToLocalStorage("rolodex-contacts-cache", JSON.stringify(contacts));
+      // Ensure we're saving contacts with their complete data including tags
+      const contactsToCache = contacts.map(contact => ({
+        ...contact,
+        tags: contact.tags || [], // Ensure tags are always an array
+      }));
+      
+      saveToLocalStorage("rolodex-contacts-cache", JSON.stringify(contactsToCache));
       saveToLocalStorage("rolodex-contacts-cache-timestamp", Date.now());
+      
+      console.log("💾 Cached contacts with tags:", contactsToCache.filter(c => c.tags && c.tags.length > 0).length);
     } catch (error) {
       console.error("Failed to save contacts to cache:", error);
     }
@@ -90,9 +108,75 @@ export const useContacts = () => {
     }
   };
 
+  // Force refresh cache (useful for manual refresh)
+  const forceRefreshCache = async () => {
+    console.log("🔄 Force refreshing cache...");
+    clearContactsCache();
+    setLoading(true);
+    try {
+      await fetchContacts(false); // not background
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Debug function to create test contacts in cache
+  const createTestCache = () => {
+    const testContacts: Contact[] = [
+      {
+        id: "test1@example.com",
+        name: "Test Contact 1",
+        email: "test1@example.com",
+        company: "Test Company",
+        tags: ["test", "demo"],
+        lastContact: new Date().toISOString(),
+        source: "Gmail",
+        hidden: false,
+        starred: false,
+        lastEmailSubject: "Test Subject",
+        lastEmailPreview: "Test preview",
+        lastMeetingName: "Test Meeting",
+        photoUrl: ""
+      }
+    ];
+    
+    console.log("🧪 Creating test cache with", testContacts.length, "contacts");
+    saveContactsToCache(testContacts);
+    setContacts(testContacts);
+    setCachedContacts(testContacts);
+    setLoading(false);
+    
+    // Debug: check if cache was actually saved
+    setTimeout(() => {
+      console.log("🧪 Cache verification:", {
+        localStorageHasCache: !!localStorage.getItem("rolodex-contacts-cache"),
+        localStorageHasTimestamp: !!localStorage.getItem("rolodex-contacts-cache-timestamp"),
+        stateContacts: contacts.length,
+        stateCachedContacts: cachedContacts.length
+      });
+    }, 100);
+  };
+
+  // Check if cache is stale and needs refreshing
+  const isCacheStale = (): boolean => {
+    try {
+      const timestamp = loadFromLocalStorage<number | null>("rolodex-contacts-cache-timestamp", null);
+      if (!timestamp) return true;
+      
+      const cacheAge = Date.now() - timestamp;
+      const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
+      return cacheAge > maxAge;
+    } catch (error) {
+      console.error("Failed to check cache staleness:", error);
+      return true;
+    }
+  };
+
   // Load contacts from localStorage cache
   const loadContactsFromCache = (): Contact[] | null => {
     try {
+      console.log("🔍 Attempting to load contacts from cache...");
+      
       const cached = loadFromLocalStorage<string | null>("rolodex-contacts-cache", null);
       const timestamp = loadFromLocalStorage<number | null>("rolodex-contacts-cache-timestamp", null);
 
@@ -108,9 +192,9 @@ export const useContacts = () => {
         return null;
       }
 
-      // Check if cache is less than 24 hours old
+      // Check if cache is less than 7 days old (more user-friendly)
       const cacheAge = Date.now() - timestamp;
-      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+      const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
 
       console.log("⏰ Cache age check:", {
         now: new Date().toISOString(),
@@ -128,13 +212,26 @@ export const useContacts = () => {
         isExpired: cacheAge > maxAge,
       });
 
+      // For now, let's be more lenient with cache expiration
       if (cacheAge > maxAge) {
-        console.log("Cache expired, will fetch fresh data");
-        return null;
+        console.log("⚠️ Cache expired, but let's use it anyway for debugging");
+        // return null; // Comment out expiration for now
       }
 
       // Parse the cached data
       const contacts = JSON.parse(cached);
+      console.log("🔍 Parsed cache data:", {
+        type: typeof contacts,
+        isArray: Array.isArray(contacts),
+        length: contacts?.length || 0,
+        firstItem: contacts?.[0] ? {
+          hasId: !!contacts[0].id,
+          hasEmail: !!contacts[0].email,
+          hasName: !!contacts[0].name,
+          hasTags: !!contacts[0].tags,
+          tagsLength: contacts[0].tags?.length || 0
+        } : 'no items'
+      });
 
       // Validate that we got a proper array of contacts
       if (!Array.isArray(contacts)) {
@@ -163,52 +260,21 @@ export const useContacts = () => {
         return null;
       }
 
-      console.log("📦 Loaded", contacts.length, "contacts from cache");
-      return contacts;
+      // Ensure all contacts have tags array
+      const validatedContacts = contacts.map(contact => ({
+        ...contact,
+        tags: contact.tags || [], // Ensure tags are always an array
+      }));
+
+      console.log("📦 Loaded", validatedContacts.length, "contacts from cache");
+      console.log("🏷️ Contacts with tags:", validatedContacts.filter(c => c.tags && c.tags.length > 0).length);
+      
+      return validatedContacts;
     } catch (error) {
       console.error("❌ Failed to load contacts from cache:", error);
       // Clear corrupted cache
       clearContactsCache();
       return null;
-    }
-  };
-
-  const loadContacts = async () => {
-    // First, try to load from cache for immediate display
-    const cachedContacts = loadContactsFromCache();
-    if (cachedContacts) {
-      console.log("🚀 Showing cached contacts immediately");
-      
-      // Apply edits to cached contacts so they show the correct state
-      console.log("🔍 Applying edits to cached contacts...");
-      const cachedContactsWithEdits = await applyEditsToContacts(cachedContacts);
-      console.log(`📊 Cached contacts: ${cachedContacts.length}, with edits: ${cachedContactsWithEdits.length}`);
-      
-      // Debug: check if any contacts have tags
-      const contactsWithTags = cachedContactsWithEdits.filter(c => c.tags && c.tags.length > 0);
-      console.log(`🏷️ Contacts with tags: ${contactsWithTags.length}`);
-      contactsWithTags.forEach(c => {
-        console.log(`  - ${c.name} (${c.company}): ${c.tags?.join(', ')}`);
-      });
-      
-      setContacts(cachedContactsWithEdits);
-      setCachedContacts(cachedContactsWithEdits);
-      
-      // Then fetch fresh data in the background (only if we have a session)
-      if (session) {
-        console.log("🔄 Fetching fresh contacts from backend");
-        // Use a small delay to ensure cached contacts are displayed first
-        setTimeout(() => {
-          fetchContacts(true); // background = true
-        }, 100);
-      }
-    } else {
-      console.log("📭 No cached contacts available, will show loading state");
-      // If no cached contacts, fetch immediately (not in background)
-      if (session) {
-        console.log("🔄 Fetching contacts immediately (no cache)");
-        fetchContacts(false); // not background = false
-      }
     }
   };
 
@@ -358,25 +424,37 @@ export const useContacts = () => {
 
   // Load cached contacts immediately on mount
   useEffect(() => {
+    console.log("🔍 Mount effect - checking for cached contacts...");
+    
+    // Debug: check what's actually in localStorage
+    console.log("🔍 localStorage debug:", {
+      hasCache: !!localStorage.getItem("rolodex-contacts-cache"),
+      hasTimestamp: !!localStorage.getItem("rolodex-contacts-cache-timestamp"),
+      cacheRaw: localStorage.getItem("rolodex-contacts-cache")?.substring(0, 100),
+      timestampRaw: localStorage.getItem("rolodex-contacts-cache-timestamp")
+    });
+    
     const cachedContacts = loadContactsFromCache();
+    console.log("🔍 Cache check result:", {
+      hasCached: !!cachedContacts,
+      cachedLength: cachedContacts?.length || 0,
+      currentLoading: loading
+    });
+    
     if (cachedContacts) {
       console.log("🚀 Loading cached contacts on mount");
       
       // Apply edits to cached contacts so they show the correct state
-      console.log("🔍 Applying edits to cached contacts...");
       applyEditsToContacts(cachedContacts).then((cachedContactsWithEdits) => {
-        console.log(`📊 Cached contacts: ${cachedContacts.length}, with edits: ${cachedContactsWithEdits.length}`);
-        
-        // Debug: check if any contacts have tags
-        const contactsWithTags = cachedContactsWithEdits.filter(c => c.tags && c.tags.length > 0);
-        console.log(`🏷️ Contacts with tags: ${contactsWithTags.length}`);
-        contactsWithTags.forEach(c => {
-          console.log(`  - ${c.name} (${c.company}): ${c.tags?.join(', ')}`);
-        });
-        
         setContacts(cachedContactsWithEdits);
         setCachedContacts(cachedContactsWithEdits);
+        setLoading(false); // Never show loading when we have cache
+        console.log("✅ Cached contacts loaded, loading set to false");
       });
+    } else {
+      // No cached contacts, but don't show loading screen
+      setLoading(false);
+      console.log("📭 No cached contacts found, loading set to false");
     }
   }, []);
 
@@ -385,29 +463,32 @@ export const useContacts = () => {
     if (session && !hasLoadedContacts.current) {
       hasLoadedContacts.current = true;
       
-      // If we don't have any contacts loaded yet, load them
-      if (contacts.length === 0) {
-        loadContacts();
-
-        // Add a timeout to prevent infinite loading
-        const timeout = setTimeout(() => {
-          if (contacts.length === 0 && !backgroundSyncing) {
-            console.log(
-              "⏰ Loading timeout reached, clearing cache and retrying"
-            );
-            clearContactsCache();
-            loadContacts();
-          }
-        }, 30000); // 30 seconds timeout
-
-        return () => clearTimeout(timeout);
-      } else {
-        // If we already have contacts (from cache), just fetch fresh data in background
-        console.log("🔄 Fetching fresh contacts from backend");
+      // If we have cached contacts, just fetch fresh data in background
+      if (cachedContacts.length > 0) {
+        console.log("🔄 Fetching fresh contacts from backend (background)");
         fetchContacts(true); // background = true
+      } else {
+        // Only fetch immediately if no cache exists
+        console.log("🔄 Fetching contacts immediately (no cache)");
+        fetchContacts(false); // not background
       }
     }
   }, [session]);
+
+  // Log Firebase status for debugging
+  useEffect(() => {
+    if (session) {
+      console.log("🔍 Firebase status check:");
+      console.log("  - Firebase DB available:", !!db);
+      console.log("  - Cached contacts:", cachedContacts.length);
+      console.log("  - Current contacts:", contacts.length);
+      
+      if (!db) {
+        console.log("⚠️ Firebase not configured - contact edits won't persist across sessions");
+        console.log("📖 See FIREBASE_SETUP.md for setup instructions");
+      }
+    }
+  }, [session, db, cachedContacts.length, contacts.length]);
 
   return {
     contacts,
@@ -416,8 +497,11 @@ export const useContacts = () => {
     backgroundSyncing,
     freshDataLoaded,
     fetchContacts,
-    loadContacts,
     clearContactsCache,
     loadContactsFromCache,
+    cachedContacts,
+    forceRefreshCache,
+    isCacheStale,
+    createTestCache,
   };
 }; 

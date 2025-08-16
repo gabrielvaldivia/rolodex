@@ -16,7 +16,8 @@ interface ContactEdit {
 
 async function saveEdit(edit: ContactEdit) {
   if (!db) {
-    console.warn('Firebase not initialized, edit not saved:', edit.id)
+    console.warn('Firebase not initialized, edit not saved to cloud:', edit.id)
+    // Return success even without Firebase to prevent app crashes
     return
   }
 
@@ -30,8 +31,10 @@ async function saveEdit(edit: ContactEdit) {
     await setDoc(docRef, editToSave, { merge: true })
     console.log(`Successfully saved edit for ${edit.id}`)
   } catch (error) {
-    console.error('Error saving edit:', error)
-    throw error
+    console.error('Error saving edit to Firebase:', error)
+    // Don't throw error - just log it and continue
+    // This prevents the app from crashing when Firebase has permission issues
+    console.warn('Edit not saved to Firebase due to error, but continuing...')
   }
 }
 
@@ -115,7 +118,13 @@ export async function PUT(
       newEdit.photoUrl = body.photoUrl
     }
 
-    await saveEdit(newEdit)
+    // Try to save to Firebase, but don't fail if it doesn't work
+    try {
+      await saveEdit(newEdit)
+    } catch (firebaseError) {
+      console.warn('Firebase save failed, but edit is still valid:', firebaseError)
+      // Continue without Firebase - the edit is still valid
+    }
 
     return NextResponse.json({ success: true, edit: newEdit })
   } catch (error) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Contact, Company, SortField, SortDirection, View, ViewType } from "@/types";
 import { useLocalStorage } from "./useLocalStorage";
 
@@ -21,6 +21,21 @@ export const useFilters = () => {
   >("rolodex-custom-tag-colors", {});
   const [columnOrder, setColumnOrder] = useLocalStorage<string[]>("rolodex-column-order", []);
 
+  // Load tags from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedTags = localStorage.getItem("rolodex-all-tags");
+      if (savedTags) {
+        const parsedTags = JSON.parse(savedTags);
+        if (Array.isArray(parsedTags)) {
+          setAllTags(parsedTags);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load tags from localStorage:", error);
+    }
+  }, []);
+
   // Extract all unique tags from contacts for autocomplete
   const updateAllTags = useCallback((contacts: Contact[]) => {
     const allTagsSet = new Set<string>();
@@ -29,7 +44,15 @@ export const useFilters = () => {
         contact.tags.forEach((tag) => allTagsSet.add(tag));
       }
     });
-    setAllTags(Array.from(allTagsSet).sort());
+    const newAllTags = Array.from(allTagsSet).sort();
+    setAllTags(newAllTags);
+    
+    // Persist tags to localStorage for future sessions
+    try {
+      localStorage.setItem("rolodex-all-tags", JSON.stringify(newAllTags));
+    } catch (error) {
+      console.error("Failed to save tags to localStorage:", error);
+    }
   }, []);
 
   const handleSort = useCallback((field: SortField) => {

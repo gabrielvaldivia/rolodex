@@ -99,7 +99,8 @@ export async function GET() {
     return NextResponse.json(edits)
   } catch (error) {
     console.error('Error fetching edits:', error)
-    return NextResponse.json({ error: 'Failed to fetch edits' }, { status: 500 })
+    // Return empty edits instead of 500 error to prevent app crashes
+    return NextResponse.json({})
   }
 }
 

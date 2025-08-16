@@ -35,8 +35,11 @@ export default function Home() {
     backgroundSyncing,
     freshDataLoaded,
     fetchContacts,
-    loadContacts,
     clearContactsCache,
+    cachedContacts,
+    forceRefreshCache,
+    isCacheStale,
+    createTestCache,
   } = useContacts();
 
   const {
@@ -143,6 +146,21 @@ export default function Home() {
           : c
       );
       setContacts(updatedContacts);
+
+      // Also update the selected contact in the sheet state so it updates immediately
+      if (selectedContact && selectedContact.id === contact.id) {
+        const updatedSelectedContact = {
+          ...contact,
+          lastContact: selectedContact.lastContact,
+          source: selectedContact.source,
+          lastEmailSubject: selectedContact.lastEmailSubject,
+          lastEmailPreview: selectedContact.lastEmailPreview,
+          lastMeetingName: selectedContact.lastMeetingName,
+          photoUrl: contact.photoUrl,
+        };
+        // Update the edited contact state so the sheet shows the new tags immediately
+        setEditedContact(updatedSelectedContact);
+      }
     });
   };
 
@@ -248,35 +266,6 @@ export default function Home() {
     );
   }
 
-  if (session && contacts.length === 0 && loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-          <div className="text-sm text-muted-foreground">
-            {backgroundSyncing
-              ? "Syncing contacts from Google..."
-              : "Loading contacts..."}
-          </div>
-          <div className="text-xs text-gray-400 mt-2">
-            {backgroundSyncing
-              ? "This may take a couple minutes"
-              : "If this takes too long, try refreshing the page"}
-          </div>
-          <button
-            onClick={() => {
-              clearContactsCache();
-              window.location.reload();
-            }}
-            className="text-xs text-blue-500 hover:text-blue-700 underline"
-          >
-            Clear cache and retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen py-8">
       <div className="">
@@ -304,10 +293,12 @@ export default function Home() {
           loading={loading}
           backgroundSyncing={backgroundSyncing}
           fetchContacts={fetchContacts}
+          forceRefreshCache={forceRefreshCache}
+          isCacheStale={isCacheStale}
           onSettingsClick={() => router.push("/settings")}
         />
 
-        {loading ? (
+        {loading && contacts.length === 0 && !cachedContacts?.length ? (
           <div className="text-center py-8 px-8">
             <div className="text-sm text-muted-foreground">
               Loading contacts...
@@ -345,10 +336,25 @@ export default function Home() {
               >
                 Clear cache and retry
               </button>
+              <button
+                onClick={createTestCache}
+                className="block mx-auto text-xs text-green-500 hover:text-green-700 underline mt-2"
+              >
+                Create Test Cache
+              </button>
             </div>
           </div>
         ) : (
           <div className="w-full">
+            {/* Background sync indicator */}
+            {backgroundSyncing && (
+              <div className="text-center py-2 px-8 mb-4">
+                <div className="text-xs text-blue-600 bg-blue-50 px-3 py-1 rounded-full inline-flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                  <span>Syncing contacts in background...</span>
+                </div>
+              </div>
+            )}
             {viewType === "kanban" ? (
               <div className="overflow-x-auto pl-8">
                 {currentView === "contacts" ? (

@@ -27,6 +27,7 @@ let db: Firestore | null = null;
 if (missingVars.length > 0) {
   console.warn('Missing Firebase environment variables:', missingVars);
   console.warn('Firebase features will be disabled. Please check your .env.local file.');
+  console.warn('See FIREBASE_SETUP.md for setup instructions.');
 } else {
   try {
     app = initializeApp(firebaseConfig);
