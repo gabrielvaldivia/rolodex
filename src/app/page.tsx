@@ -2,6 +2,7 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
@@ -34,6 +35,7 @@ export default function Home() {
     loading,
     backgroundSyncing,
     freshDataLoaded,
+    progress,
     fetchContacts,
     clearContactsCache,
     cachedContacts,
@@ -122,6 +124,24 @@ export default function Home() {
     }
   }, [contacts, updateAllTags]);
 
+  // Debug company groupings when contacts change
+  useEffect(() => {
+    if (contacts.length > 0) {
+      const companies = groupContactsByCompany(contacts);
+      console.log(
+        "🏢 Company groupings updated:",
+        companies.map((c) => ({
+          name: c.name,
+          contactCount: c.contactCount,
+          contacts: c.contacts.map((contact) => ({
+            name: contact.name,
+            company: contact.company,
+          })),
+        }))
+      );
+    }
+  }, [contacts]);
+
   // Contact handlers
   const handleContactClick = (contact: Contact) => {
     openContactSheet(contact);
@@ -129,6 +149,17 @@ export default function Home() {
 
   const saveContactDebounced = async (contact: Contact) => {
     await saveWithDebounce(async () => {
+      // Check if company name changed
+      const originalContact = contacts.find((c) => c.id === contact.id);
+      const companyChanged =
+        originalContact && originalContact.company !== contact.company;
+
+      if (companyChanged) {
+        console.log(
+          `🏢 Company changed for contact ${contact.name}: "${originalContact.company}" → "${contact.company}"`
+        );
+      }
+
       await saveContact(contact);
 
       // Update the contact in the contacts array
@@ -147,19 +178,43 @@ export default function Home() {
       );
       setContacts(updatedContacts);
 
-      // Also update the selected contact in the sheet state so it updates immediately
-      if (selectedContact && selectedContact.id === contact.id) {
-        const updatedSelectedContact = {
-          ...contact,
-          lastContact: selectedContact.lastContact,
-          source: selectedContact.source,
-          lastEmailSubject: selectedContact.lastEmailSubject,
-          lastEmailPreview: selectedContact.lastEmailPreview,
-          lastMeetingName: selectedContact.lastMeetingName,
-          photoUrl: contact.photoUrl,
-        };
-        // Update the edited contact state so the sheet shows the new tags immediately
-        setEditedContact(updatedSelectedContact);
+      // If company changed, we need to handle company regrouping
+      if (companyChanged && originalContact) {
+        console.log(
+          `🔄 Handling company regrouping for contact ${contact.name}`
+        );
+
+        // Update the selected contact in the sheet state so it updates immediately
+        if (selectedContact && selectedContact.id === contact.id) {
+          const updatedSelectedContact = {
+            ...contact,
+            lastContact: selectedContact.lastContact,
+            source: selectedContact.source,
+            lastEmailSubject: selectedContact.lastEmailSubject,
+            lastEmailPreview: selectedContact.lastEmailPreview,
+            lastMeetingName: selectedContact.lastMeetingName,
+            photoUrl: contact.photoUrl,
+          };
+          setEditedContact(updatedSelectedContact);
+        }
+
+        // Force a re-render by updating the contacts state
+        // This will trigger the useEffect that recalculates company groupings
+        setContacts([...updatedContacts]);
+      } else {
+        // Also update the selected contact in the sheet state so it updates immediately
+        if (selectedContact && selectedContact.id === contact.id) {
+          const updatedSelectedContact = {
+            ...contact,
+            lastContact: selectedContact.lastContact,
+            source: selectedContact.source,
+            lastEmailSubject: selectedContact.lastEmailSubject,
+            lastEmailPreview: selectedContact.lastEmailPreview,
+            lastMeetingName: selectedContact.lastMeetingName,
+            photoUrl: contact.photoUrl,
+          };
+          setEditedContact(updatedSelectedContact);
+        }
       }
     });
   };
@@ -301,12 +356,15 @@ export default function Home() {
         {loading && contacts.length === 0 && !cachedContacts?.length ? (
           <div className="text-center py-8 px-8">
             <div className="text-sm text-muted-foreground">
-              Loading contacts...
+              Processing emails...
             </div>
             <div className="text-xs text-gray-400 mt-2">
               {backgroundSyncing
                 ? "Syncing from Google (this may take a couple minutes)"
                 : "This may take a couple minutes"}
+            </div>
+            <div className="mt-4 max-w-md mx-auto">
+              <Progress value={progress} max={100} showLabel={true} />
             </div>
           </div>
         ) : contacts.length === 0 ? (
@@ -325,7 +383,7 @@ export default function Home() {
                 className="bg-blue-500 text-white px-4 py-2 rounded text-sm"
                 disabled={loading || backgroundSyncing}
               >
-                {loading ? "Loading..." : "Try Again"}
+                {loading ? "Processing..." : "Try Again"}
               </button>
               <button
                 onClick={() => {
@@ -355,6 +413,17 @@ export default function Home() {
                 </div>
               </div>
             )}
+            {/* Progress indicator for initial load */}
+            {loading &&
+              !backgroundSyncing &&
+              progress > 0 &&
+              progress < 100 && (
+                <div className="text-center py-2 px-8 mb-4">
+                  <div className="text-xs text-green-600 bg-green-50 px-3 py-1 rounded-full inline-flex items-center space-x-2">
+                    <span>Processing emails... {Math.round(progress)}%</span>
+                  </div>
+                </div>
+              )}
             {viewType === "kanban" ? (
               <div className="overflow-x-auto pl-8">
                 {currentView === "contacts" ? (

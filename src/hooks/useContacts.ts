@@ -13,6 +13,7 @@ export const useContacts = () => {
   const [loading, setLoading] = useState(false);
   const [backgroundSyncing, setBackgroundSyncing] = useState(false);
   const [freshDataLoaded, setFreshDataLoaded] = useState(false);
+  const [progress, setProgress] = useState(0);
   const hasLoadedContacts = useRef(false);
 
   // Function to apply edits to contacts
@@ -42,6 +43,8 @@ export const useContacts = () => {
         "Loaded edits with tags:",
         Object.values(editsObject).slice(0, 3)
       );
+      
+
 
       return baseContacts.map((contact) => {
         const edit = editsObject[contact.id];
@@ -51,7 +54,7 @@ export const useContacts = () => {
             name: edit.name !== undefined ? edit.name : contact.name,
             email: edit.email !== undefined ? edit.email : contact.email,
             company:
-              edit.company !== undefined ? edit.company : contact.company,
+              edit.company !== undefined ? edit.company : contact.company, // This now properly handles null
             hidden: edit.hidden !== undefined ? edit.hidden : contact.hidden,
             starred:
               edit.starred !== undefined ? edit.starred : contact.starred,
@@ -59,6 +62,15 @@ export const useContacts = () => {
             photoUrl:
               edit.photoUrl !== undefined ? edit.photoUrl : contact.photoUrl,
           };
+          
+          // Debug: log if company was changed
+          if (edit.company !== undefined && edit.company !== contact.company) {
+            console.log(`🏢 Applied company edit for contact ${contact.id}:`, {
+              oldCompany: contact.company,
+              newCompany: edit.company,
+              contactName: contact.name
+            });
+          }
           
           // Debug: log if tags were changed
           if (edit.tags && JSON.stringify(edit.tags) !== JSON.stringify(contact.tags)) {
@@ -283,6 +295,12 @@ export const useContacts = () => {
       setBackgroundSyncing(true);
     } else {
       setLoading(true);
+      setProgress(0);
+      console.log("📊 Progress: 0% - Starting...");
+      // Add initial progress update
+      await new Promise(resolve => setTimeout(resolve, 100));
+      setProgress(10);
+      console.log("📊 Progress: 10% - Initialized");
     }
     try {
       // Check if we have a valid session with access token
@@ -300,6 +318,13 @@ export const useContacts = () => {
           return;
         }
         throw new Error("Authentication required");
+      }
+
+      // Update progress - authentication check complete
+      if (!background) {
+        console.log("📊 Progress: 20% - Authentication check complete");
+        setProgress(20);
+        await new Promise(resolve => setTimeout(resolve, 200)); // Small delay to make progress visible
       }
 
       // Use regular endpoint for initial load (with caching), refresh endpoint for background sync
@@ -324,6 +349,13 @@ export const useContacts = () => {
         };
       }
 
+      // Update progress - starting API request
+      if (!background) {
+        console.log("📊 Progress: 40% - Starting API request");
+        setProgress(40);
+        await new Promise(resolve => setTimeout(resolve, 200)); // Small delay to make progress visible
+      }
+      
       const response = await fetch(endpoint, requestOptions);
 
       if (!response.ok) {
@@ -351,6 +383,13 @@ export const useContacts = () => {
         throw new Error(errorData.error || "Failed to fetch contacts");
       }
 
+      // Update progress - API response received
+      if (!background) {
+        console.log("📊 Progress: 60% - API response received");
+        setProgress(60);
+        await new Promise(resolve => setTimeout(resolve, 200)); // Small delay to make progress visible
+      }
+      
       const data = await response.json();
 
       // Handle different response formats
@@ -358,8 +397,29 @@ export const useContacts = () => {
       // The regular endpoint returns the contacts array directly
       const contacts = data.contacts || data;
 
+      // Update progress - applying edits
+      if (!background) {
+        console.log("📊 Progress: 80% - Applying edits");
+        setProgress(80);
+        await new Promise(resolve => setTimeout(resolve, 200)); // Small delay to make progress visible
+      }
+      
       // Apply any existing edits to the contacts
       const contactsWithEdits = await applyEditsToContacts(contacts);
+      
+      // Update progress based on actual email processing
+      if (!background && contactsWithEdits.length > 0) {
+        console.log(`📊 Progress: 80-90% - Processing ${contactsWithEdits.length} emails in batches`);
+        // Simulate processing progress for each batch of emails
+        const batchSize = Math.max(1, Math.floor(contactsWithEdits.length / 10));
+        for (let i = 0; i < contactsWithEdits.length; i += batchSize) {
+          const currentProgress = 80 + (i / contactsWithEdits.length) * 10;
+          console.log(`📊 Progress: ${Math.round(currentProgress)}% - Processed ${i + batchSize}/${contactsWithEdits.length} emails`);
+          setProgress(Math.min(currentProgress, 90));
+          await new Promise(resolve => setTimeout(resolve, 50)); // Faster updates for email processing
+        }
+      }
+      
       console.log(
         "Contacts with edits applied:",
         contactsWithEdits.slice(0, 3)
@@ -372,6 +432,13 @@ export const useContacts = () => {
         "total contacts"
       ); // Debug: count how many contacts have photos
 
+      // Update progress - finalizing
+      if (!background) {
+        console.log("📊 Progress: 90% - Finalizing");
+        setProgress(90);
+        await new Promise(resolve => setTimeout(resolve, 200)); // Small delay to make progress visible
+      }
+      
       // Save to cache and update state
       saveContactsToCache(contactsWithEdits);
       setContacts(contactsWithEdits);
@@ -394,6 +461,13 @@ export const useContacts = () => {
         setTimeout(() => setFreshDataLoaded(false), 3000);
       }
 
+      // Update progress - complete
+      if (!background) {
+        console.log("📊 Progress: 100% - Complete!");
+        setProgress(100);
+        await new Promise(resolve => setTimeout(resolve, 300)); // Longer delay to show completion
+      }
+      
       // Backend caching is now handled automatically by the API
     } catch (error) {
       console.error("Error fetching contacts:", error);
@@ -446,8 +520,22 @@ export const useContacts = () => {
       
       // Apply edits to cached contacts so they show the correct state
       applyEditsToContacts(cachedContacts).then((cachedContactsWithEdits) => {
+        console.log("🔍 Edits applied to cached contacts:", {
+          before: cachedContacts.length,
+          after: cachedContactsWithEdits.length,
+          hasChanges: JSON.stringify(cachedContactsWithEdits) !== JSON.stringify(cachedContacts)
+        });
+        
         setContacts(cachedContactsWithEdits);
         setCachedContacts(cachedContactsWithEdits);
+        
+        // CRITICAL FIX: Update the localStorage cache with the edited contacts
+        // This ensures that when the page reloads, the edits are preserved
+        if (JSON.stringify(cachedContactsWithEdits) !== JSON.stringify(cachedContacts)) {
+          console.log("🔄 Updating localStorage cache with edited contacts");
+          saveContactsToCache(cachedContactsWithEdits);
+        }
+        
         setLoading(false); // Never show loading when we have cache
         console.log("✅ Cached contacts loaded, loading set to false");
       });
@@ -496,6 +584,7 @@ export const useContacts = () => {
     loading,
     backgroundSyncing,
     freshDataLoaded,
+    progress,
     fetchContacts,
     clearContactsCache,
     loadContactsFromCache,

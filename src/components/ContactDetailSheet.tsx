@@ -42,8 +42,16 @@ export default function ContactDetailSheet({
 }: ContactDetailSheetProps) {
   const [editingName, setEditingName] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
+  const [localContact, setLocalContact] = useState<Contact | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize local contact state when editedContact changes
+  useEffect(() => {
+    if (editedContact) {
+      setLocalContact(editedContact);
+    }
+  }, [editedContact]);
 
   // Reset editing state when sheet opens/closes
   useEffect(() => {
@@ -70,14 +78,25 @@ export default function ContactDetailSheet({
                 {editingName ? (
                   <Input
                     ref={nameInputRef}
-                    value={editedContact.name}
+                    value={localContact?.name || ""}
                     onChange={(e) => {
-                      saveContactDebounced({
-                        ...editedContact,
-                        name: e.target.value,
-                      });
+                      // Update local state immediately for responsive UI
+                      setLocalContact((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              name: e.target.value,
+                            }
+                          : null
+                      );
                     }}
-                    onBlur={() => setEditingName(false)}
+                    onBlur={() => {
+                      setEditingName(false);
+                      // Save when user leaves the field
+                      if (localContact) {
+                        saveContactDebounced(localContact);
+                      }
+                    }}
                     className="text-lg font-semibold"
                   />
                 ) : (
@@ -89,21 +108,32 @@ export default function ContactDetailSheet({
                     }}
                     className="text-lg font-semibold px-2 py-1 rounded -ml-2 text-left w-full"
                   >
-                    {editedContact.name}
+                    {localContact?.name || editedContact.name}
                   </button>
                 )}
                 <div>
                   {editingEmail ? (
                     <Input
                       ref={emailInputRef}
-                      value={editedContact.email}
+                      value={localContact?.email || ""}
                       onChange={(e) => {
-                        saveContactDebounced({
-                          ...editedContact,
-                          email: e.target.value,
-                        });
+                        // Update local state immediately for responsive UI
+                        setLocalContact((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                email: e.target.value,
+                              }
+                            : null
+                        );
                       }}
-                      onBlur={() => setEditingEmail(false)}
+                      onBlur={() => {
+                        setEditingEmail(false);
+                        // Save when user leaves the field
+                        if (localContact) {
+                          saveContactDebounced(localContact);
+                        }
+                      }}
                       className="text-sm"
                     />
                   ) : (
@@ -113,9 +143,9 @@ export default function ContactDetailSheet({
                         // Focus the input after a brief delay to ensure it's rendered
                         setTimeout(() => emailInputRef.current?.focus(), 0);
                       }}
-                      className="text-sm text-muted-foreground font-normal px-2 py-1 rounded -ml-2"
+                      className="text-sm text-muted-foreground font-normal px-2 py-2 rounded -ml-2"
                     >
-                      {editedContact.email}
+                      {localContact?.email || editedContact.email}
                     </button>
                   )}
                 </div>
@@ -161,23 +191,51 @@ export default function ContactDetailSheet({
               <Label className="text-sm font-medium">Company</Label>
               <div className="mt-2 relative">
                 <Input
-                  value={editedContact.company || ""}
+                  value={localContact?.company || ""}
                   onChange={(e) => {
-                    saveContactDebounced({
-                      ...editedContact,
-                      company: e.target.value,
-                    });
+                    // Update local state immediately for responsive UI
+                    setLocalContact((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            company: e.target.value,
+                          }
+                        : null
+                    );
+                  }}
+                  onBlur={() => {
+                    // Save only when user leaves the field
+                    if (localContact) {
+                      saveContactDebounced(localContact);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    // Save on Enter key
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur(); // This will trigger onBlur and save
+                    }
                   }}
                   placeholder="Enter company name..."
                   className="text-sm pr-8"
                 />
-                {editedContact.company && (
+                {localContact?.company && (
                   <button
                     onClick={() => {
-                      saveContactDebounced({
-                        ...editedContact,
-                        company: "",
-                      });
+                      setLocalContact((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              company: "",
+                            }
+                          : null
+                      );
+                      // Save immediately when clearing company
+                      if (localContact) {
+                        saveContactDebounced({
+                          ...localContact,
+                          company: "",
+                        });
+                      }
                     }}
                     className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
@@ -191,12 +249,24 @@ export default function ContactDetailSheet({
               <Label className="text-sm font-medium">Tags</Label>
               <div className="mt-2">
                 <TagInput
-                  tags={editedContact.tags || []}
+                  tags={localContact?.tags || []}
                   onTagsChange={(tags) => {
-                    saveContactDebounced({
-                      ...editedContact,
-                      tags: tags,
-                    });
+                    // Update local state immediately for responsive UI
+                    setLocalContact((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            tags: tags,
+                          }
+                        : null
+                    );
+                    // Save immediately for tags since they're discrete changes
+                    if (localContact) {
+                      saveContactDebounced({
+                        ...localContact,
+                        tags: tags,
+                      });
+                    }
                   }}
                   suggestions={allTags}
                   customColors={customTagColors}

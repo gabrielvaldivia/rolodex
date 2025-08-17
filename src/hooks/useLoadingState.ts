@@ -19,7 +19,7 @@ export const useLoadingState = () => {
 
   const getLoadingMessage = useCallback(() => {
     if (loadingStates.background) return "Syncing contacts from Google...";
-    if (loadingStates.initial) return "Loading contacts...";
+    if (loadingStates.initial) return "Processing emails...";
     if (loadingStates.saving) return "Saving...";
     return "";
   }, [loadingStates]);

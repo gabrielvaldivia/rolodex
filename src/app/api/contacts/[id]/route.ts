@@ -6,7 +6,7 @@ interface ContactEdit {
   id: string
   name?: string
   email?: string
-  company?: string
+  company?: string | null // Allow null for deleted companies
   hidden?: boolean
   starred?: boolean
   tags?: string[]
@@ -102,15 +102,15 @@ export async function PUT(
       return NextResponse.json({ error: 'Contact ID is required' }, { status: 400 })
     }
 
-    // Create or update the edit - filter out undefined values for Firebase
+    // Create or update the edit - properly handle null/undefined values
     const newEdit: ContactEdit = {
       id,
-      name: body.name || '',
-      email: body.email || '',
-      company: body.company || '',
-      hidden: body.hidden || false,
-      starred: body.starred || false,
-      tags: body.tags || []
+      name: body.name !== undefined ? body.name : '',
+      email: body.email !== undefined ? body.email : '',
+      company: body.company !== undefined ? body.company : null, // Allow null for deleted companies
+      hidden: body.hidden !== undefined ? body.hidden : false,
+      starred: body.starred !== undefined ? body.starred : false,
+      tags: body.tags !== undefined ? body.tags : []
     }
 
     // Only add photoUrl if it has a value (Firebase doesn't accept undefined)
